@@ -55,6 +55,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { StageProgressBar } from '../StageProgressBar';
+import { PortalActionPanel } from './PortalActionPanel';
 import { ActivityRow } from '@/features/activities/components/ActivityRow';
 import { formatPriorityPtBr } from '@/lib/utils/priority';
 import { BriefingDrawer } from '@/features/deals/components/BriefingDrawer';
@@ -135,6 +136,10 @@ export const DealDetailModal: React.FC<DealDetailModalProps> = ({ dealId, isOpen
 
   // Determine the correct board for this deal
   const dealBoard = deal ? (boardsById.get(deal.boardId) ?? activeBoard) : activeBoard;
+
+  // Boards "regidos por motor" são espelho de um funil externo (portal dos representantes):
+  // a etapa muda por evento registrado (ver PortalActionPanel), nunca por arraste/clique manual.
+  const isMotorBoard = dealBoard?.regidoPor === 'motor';
 
   // Use unified TanStack Query hook for moving deals
   const { moveDeal } = useMoveDealSimple(dealBoard, lifecycleStages);
@@ -608,32 +613,55 @@ export const DealDetailModal: React.FC<DealDetailModalProps> = ({ dealId, isOpen
             </div>
 
             {dealBoard ? (
-              <StageProgressBar
-                stages={dealBoard.stages}
-                currentStatus={deal.status}
-                variant="timeline"
-                onStageClick={stageId => {
-                  // Check if clicking on a LOST stage
-                  const targetStage = dealBoard.stages.find(s => s.id === stageId);
-                  // Check if it matches configured Lost Stage OR explicitly linked 'OTHER' stage
-                  const isLostStage =
-                    dealBoard.lostStageId === stageId ||
-                    targetStage?.linkedLifecycleStage === 'OTHER';
+              isMotorBoard ? (
+                // Motor board: sem controle manual de mudança de estágio (nem clique, nem arraste).
+                // A etapa muda como consequência do registro no PortalActionPanel abaixo.
+                <div className="mt-4 flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+                    Estágio atual
+                  </span>
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    {stageLabel ?? '—'}
+                  </span>
+                </div>
+              ) : (
+                <StageProgressBar
+                  stages={dealBoard.stages}
+                  currentStatus={deal.status}
+                  variant="timeline"
+                  onStageClick={stageId => {
+                    // Check if clicking on a LOST stage
+                    const targetStage = dealBoard.stages.find(s => s.id === stageId);
+                    // Check if it matches configured Lost Stage OR explicitly linked 'OTHER' stage
+                    const isLostStage =
+                      dealBoard.lostStageId === stageId ||
+                      targetStage?.linkedLifecycleStage === 'OTHER';
 
-                  if (isLostStage) {
-                    // Show loss reason modal
-                    setPendingLostStageId(stageId);
-                    setLossReasonOrigin('stage');
-                    setShowLossReasonModal(true);
-                  } else {
-                    // Regular move
-                    moveDeal(deal, stageId);
-                  }
-                }}
-              />
+                    if (isLostStage) {
+                      // Show loss reason modal
+                      setPendingLostStageId(stageId);
+                      setLossReasonOrigin('stage');
+                      setShowLossReasonModal(true);
+                    } else {
+                      // Regular move
+                      moveDeal(deal, stageId);
+                    }
+                  }}
+                />
+              )
             ) : (
               <div className="mt-4 rounded-lg border border-slate-200/60 bg-slate-50 px-4 py-3 text-xs text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                 Board não encontrado para este negócio. Algumas ações (mover estágio) podem ficar indisponíveis.
+              </div>
+            )}
+
+            {isMotorBoard && (
+              <div className="mt-4">
+                <PortalActionPanel
+                  dealId={deal.id}
+                  isAdmin={profile?.role === 'admin'}
+                  onDone={() => addToast('Ação registrada.', 'success')}
+                />
               </div>
             )}
           </div>

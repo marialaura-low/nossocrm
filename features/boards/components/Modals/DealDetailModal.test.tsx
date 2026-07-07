@@ -1,8 +1,12 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 
 import { DealDetailModal } from './DealDetailModal';
+// Referências mockadas (via vi.mock abaixo) — usadas para configurar boards por teste
+// e para verificar se o controle manual de estágio foi ou não renderizado.
+import { useBoards } from '@/lib/query/hooks';
+import { StageProgressBar } from '../StageProgressBar';
 
 // Keep this test focused: we only want to ensure opening/closing the modal
 // never crashes due to hook-order issues (React error #310).
@@ -67,6 +71,9 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
       }
       return { data: [], isLoading: false };
     },
+    // PortalActionPanel (renderizado dentro do DealDetailModal em boards de motor) chama
+    // useQueryClient() para invalidar DEALS_VIEW_KEY após um registro bem-sucedido.
+    useQueryClient: () => ({ invalidateQueries: vi.fn() }),
   };
 });
 
@@ -74,7 +81,9 @@ vi.mock('@/lib/query/hooks', () => ({
   useMoveDealSimple: () => ({ moveDeal: vi.fn() }),
   useContacts: () => ({ data: [], isLoading: false }),
   useActivities: () => ({ data: [], isLoading: false }),
-  useBoards: () => ({ data: [], isLoading: false }),
+  // vi.fn() (não uma arrow function estática) para que cada teste configure os boards
+  // via vi.mocked(useBoards).mockReturnValue(...) — necessário para os cenários motor/humano.
+  useBoards: vi.fn(() => ({ data: [], isLoading: false })),
   useLifecycleStages: () => ({ data: [], isLoading: false }),
   useUpdateDeal: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useDeleteDeal: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
@@ -115,7 +124,10 @@ vi.mock('../DealSheet', () => ({
 }));
 
 vi.mock('../StageProgressBar', () => ({
-  StageProgressBar: () => null,
+  // vi.fn() em vez de uma função estática: os novos testes verificam se este componente
+  // foi ou não invocado, para confirmar que o controle manual de estágio some em boards
+  // regidos por motor (a etapa muda pelo registro no PortalActionPanel, não pelo clique).
+  StageProgressBar: vi.fn(() => null),
 }));
 
 vi.mock('@/features/activities/components/ActivityRow', () => ({
@@ -195,7 +207,34 @@ vi.mock('@/context/CRMContext', () => ({
   },
 }));
 
+// deal-1 (fixture do mock de @tanstack/react-query acima) pertence ao board-1 e está na
+// etapa "stage-1" — os dois boards abaixo só variam em `regidoPor`.
+const BOARD_STAGES = [{ id: 'stage-1', label: 'Novo', order: 0, linkedLifecycleStage: 'MQL' }];
+
+const MOTOR_BOARD = {
+  id: 'board-1',
+  name: 'Pós-venda',
+  regidoPor: 'motor' as const,
+  stages: BOARD_STAGES,
+  wonStageId: undefined,
+  lostStageId: undefined,
+  wonStayInStage: false,
+  lostStayInStage: false,
+};
+
+const HUMANO_BOARD = {
+  ...MOTOR_BOARD,
+  name: 'Pipeline de Vendas',
+  regidoPor: 'humano' as const,
+};
+
 describe('DealDetailModal', () => {
+  beforeEach(() => {
+    // Default: sem boards (mesmo comportamento que o arquivo tinha antes desta task).
+    vi.mocked(useBoards).mockReturnValue({ data: [], isLoading: false } as ReturnType<typeof useBoards>);
+    vi.mocked(StageProgressBar).mockClear();
+  });
+
   it('does not crash when toggling open/close (hook order regression)', () => {
     const { rerender } = render(
       <DealDetailModal dealId="deal-1" isOpen={false} onClose={() => {}} />
@@ -208,6 +247,33 @@ describe('DealDetailModal', () => {
 
     rerender(<DealDetailModal dealId="deal-1" isOpen={false} onClose={() => {}} />);
     expect(document.body.textContent).not.toContain('Application error');
+  });
+
+  it('renderiza o painel Registrar ação e esconde o controle manual de estágio em board de motor', () => {
+    vi.mocked(useBoards).mockReturnValue({ data: [MOTOR_BOARD], isLoading: false } as ReturnType<typeof useBoards>);
+
+    render(<DealDetailModal dealId="deal-1" isOpen={true} onClose={() => {}} />);
+
+    // Painel presente (título + as 3 ações rápidas + a ação "Perdido").
+    expect(document.body.textContent).toContain('Registrar ação');
+    expect(document.body.textContent).toContain('Falei — resolvido');
+    expect(document.body.textContent).toContain('Falei — ficou pendência');
+    expect(document.body.textContent).toContain('Não consegui contato');
+    expect(document.body.textContent).toContain('Perdido');
+
+    // Controle manual de estágio (StageProgressBar) NÃO foi renderizado.
+    expect(StageProgressBar).not.toHaveBeenCalled();
+  });
+
+  it('NÃO renderiza o painel em board humano (kanban manual preservado)', () => {
+    vi.mocked(useBoards).mockReturnValue({ data: [HUMANO_BOARD], isLoading: false } as ReturnType<typeof useBoards>);
+
+    render(<DealDetailModal dealId="deal-1" isOpen={true} onClose={() => {}} />);
+
+    expect(document.body.textContent).not.toContain('Registrar ação');
+
+    // Controle manual de estágio segue disponível (comportamento inalterado).
+    expect(StageProgressBar).toHaveBeenCalled();
   });
 });
 
