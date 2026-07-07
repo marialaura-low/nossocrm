@@ -345,6 +345,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                 handleQuickAddActivity={handleQuickAddActivity}
                 setLastMouseDownDealId={setLastMouseDownDealId}
                 onMoveDealToStage={handleMoveDealToStage}
+                isMotor={activeBoard.regidoPor === 'motor'}
               />
             ) : (
               <KanbanList

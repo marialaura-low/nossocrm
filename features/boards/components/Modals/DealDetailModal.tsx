@@ -502,88 +502,96 @@ export const DealDetailModal: React.FC<DealDetailModalProps> = ({ dealId, isOpen
                     <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${deal.isWon ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                       {deal.isWon ? '✓ GANHO' : '✗ PERDIDO'}
                     </span>
-                    <button
-                      onClick={() => {
-                        // Find first non-won/lost stage to reopen to
-                        const firstRegularStage = dealBoard?.stages.find(
-                          s => s.linkedLifecycleStage !== 'CUSTOMER' && s.linkedLifecycleStage !== 'OTHER'
-                        );
-                        if (firstRegularStage) {
-                          moveDeal(deal, firstRegularStage.id);
-                        } else {
-                          // Fallback: just clear the won/lost flags
-                          updateDeal(deal.id, { isWon: false, isLost: false, closedAt: undefined });
-                        }
-                      }}
-                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold text-sm flex items-center gap-2 transition-all"
-                    >
-                      ↩ Reabrir
-                    </button>
+                    {/* Board de motor: Reabrir escreve estado localmente e seria sobrescrito
+                        no próximo full-refresh sync — o PortalActionPanel é o único write path. */}
+                    {!isMotorBoard && (
+                      <button
+                        onClick={() => {
+                          // Find first non-won/lost stage to reopen to
+                          const firstRegularStage = dealBoard?.stages.find(
+                            s => s.linkedLifecycleStage !== 'CUSTOMER' && s.linkedLifecycleStage !== 'OTHER'
+                          );
+                          if (firstRegularStage) {
+                            moveDeal(deal, firstRegularStage.id);
+                          } else {
+                            // Fallback: just clear the won/lost flags
+                            updateDeal(deal.id, { isWon: false, isLost: false, closedAt: undefined });
+                          }
+                        }}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold text-sm flex items-center gap-2 transition-all"
+                      >
+                        ↩ Reabrir
+                      </button>
+                    )}
                   </>
                 ) : (
-                  /* Se aberto: mostra botões Ganho e Perdido */
-                  <>
-                    <button
-                      onClick={() => {
-                        // Intelligent "Won" Logic:
-                        // 0. Check for "Stay in Stage" flag (Archive/Close in place)
-                        if (dealBoard?.wonStayInStage) {
-                          moveDeal(deal, deal.status, undefined, true, false);
+                  /* Se aberto: mostra botões Ganho e Perdido — ocultos em board de motor
+                     (o PortalActionPanel abaixo é o único write path de estado nesses boards;
+                     GANHO/PERDIDO aqui escreveriam local e seriam sobrescritos no re-sync). */
+                  !isMotorBoard && (
+                    <>
+                      <button
+                        onClick={() => {
+                          // Intelligent "Won" Logic:
+                          // 0. Check for "Stay in Stage" flag (Archive/Close in place)
+                          if (dealBoard?.wonStayInStage) {
+                            moveDeal(deal, deal.status, undefined, true, false);
+                            onClose();
+                            return;
+                          }
+
+                          // 1. Check if board has explicit Won Stage configured
+                          if (dealBoard?.wonStageId) {
+                            moveDeal(deal, dealBoard.wonStageId);
+                            onClose();
+                            return;
+                          }
+
+                          // 2. Find the appropriate "Success Stage" for this board based on lifecycle
+                          const successStage = dealBoard?.stages.find(
+                            s => s.linkedLifecycleStage === 'CUSTOMER'
+                          ) || dealBoard?.stages.find(
+                            s => s.linkedLifecycleStage === 'MQL'
+                          ) || dealBoard?.stages.find(
+                            s => s.linkedLifecycleStage === 'SALES_QUALIFIED'
+                          );
+
+                          if (successStage) {
+                            moveDeal(deal, successStage.id);
+                          } else {
+                            // Fallback: just mark as won without moving
+                            updateDeal(deal.id, { isWon: true, isLost: false, closedAt: new Date().toISOString() });
+                          }
                           onClose();
-                          return;
-                        }
+                        }}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold text-sm shadow-sm flex items-center gap-2"
+                      >
+                        <ThumbsUp size={16} /> GANHO
+                      </button>
+                      <button
+                        onClick={() => {
+                          // 0. Check for "Stay in Stage" flag
+                          if (dealBoard?.lostStayInStage) {
+                            // We don't set pendingLostStageId because we aren't moving to a new stage ID
+                            // But the modal logic relies on it? No, if pendingLostStageId is null, we might need another flag.
+                            // Actually, let's keep it clean.
+                            // setPendingLostStageId(deal.status); // Hack?
+                            // Better: Just open modal, and handle logic in confirm.
+                          }
 
-                        // 1. Check if board has explicit Won Stage configured
-                        if (dealBoard?.wonStageId) {
-                          moveDeal(deal, dealBoard.wonStageId);
-                          onClose();
-                          return;
-                        }
-
-                        // 2. Find the appropriate "Success Stage" for this board based on lifecycle
-                        const successStage = dealBoard?.stages.find(
-                          s => s.linkedLifecycleStage === 'CUSTOMER'
-                        ) || dealBoard?.stages.find(
-                          s => s.linkedLifecycleStage === 'MQL'
-                        ) || dealBoard?.stages.find(
-                          s => s.linkedLifecycleStage === 'SALES_QUALIFIED'
-                        );
-
-                        if (successStage) {
-                          moveDeal(deal, successStage.id);
-                        } else {
-                          // Fallback: just mark as won without moving
-                          updateDeal(deal.id, { isWon: true, isLost: false, closedAt: new Date().toISOString() });
-                        }
-                        onClose();
-                      }}
-                      className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold text-sm shadow-sm flex items-center gap-2"
-                    >
-                      <ThumbsUp size={16} /> GANHO
-                    </button>
-                    <button
-                      onClick={() => {
-                        // 0. Check for "Stay in Stage" flag
-                        if (dealBoard?.lostStayInStage) {
-                          // We don't set pendingLostStageId because we aren't moving to a new stage ID
-                          // But the modal logic relies on it? No, if pendingLostStageId is null, we might need another flag.
-                          // Actually, let's keep it clean.
-                          // setPendingLostStageId(deal.status); // Hack?
-                          // Better: Just open modal, and handle logic in confirm.
-                        }
-
-                        // If board has explicit Lost Stage, queue it
-                        if (dealBoard?.lostStageId) {
-                          setPendingLostStageId(dealBoard.lostStageId);
-                        }
-                        setLossReasonOrigin('button');
-                        setShowLossReasonModal(true);
-                      }}
-                      className="px-4 py-2 bg-transparent border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2"
-                    >
-                      <ThumbsDown size={16} /> PERDIDO
-                    </button>
-                  </>
+                          // If board has explicit Lost Stage, queue it
+                          if (dealBoard?.lostStageId) {
+                            setPendingLostStageId(dealBoard.lostStageId);
+                          }
+                          setLossReasonOrigin('button');
+                          setShowLossReasonModal(true);
+                        }}
+                        className="px-4 py-2 bg-transparent border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2"
+                      >
+                        <ThumbsDown size={16} /> PERDIDO
+                      </button>
+                    </>
+                  )
                 )}
                 <button
                   onClick={() => setShowBriefingDrawer(true)}
@@ -594,14 +602,18 @@ export const DealDetailModal: React.FC<DealDetailModalProps> = ({ dealId, isOpen
                   <FileText size={14} aria-hidden="true" />
                   <span className="hidden sm:inline">Preparar</span>
                 </button>
-                <button
-                  onClick={() => setDeleteId(deal.id)}
-                  className="ml-2 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                  title="Excluir Negócio"
-                  aria-label="Excluir negócio"
-                >
-                  <Trash2 size={24} aria-hidden="true" />
-                </button>
+                {/* Board de motor: delete deletaria localmente, mas o re-sync do espelho
+                    ressuscitaria o deal (a fonte de verdade continua sendo o portal). */}
+                {!isMotorBoard && (
+                  <button
+                    onClick={() => setDeleteId(deal.id)}
+                    className="ml-2 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                    title="Excluir Negócio"
+                    aria-label="Excluir negócio"
+                  >
+                    <Trash2 size={24} aria-hidden="true" />
+                  </button>
+                )}
                 <button
                   onClick={onClose}
                   className="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-white"

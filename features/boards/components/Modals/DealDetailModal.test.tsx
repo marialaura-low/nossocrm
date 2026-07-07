@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 import { DealDetailModal } from './DealDetailModal';
 // Referências mockadas (via vi.mock abaixo) — usadas para configurar boards por teste
@@ -36,6 +36,34 @@ vi.mock('@/context/ToastContext', () => ({
   }),
 }));
 
+// `vi.hoisted` porque o factory de `vi.mock('@tanstack/react-query', ...)` abaixo é hoisted
+// para o topo do arquivo — precisamos que `dealFixture` exista antes disso. Mutável de
+// propósito: os testes de GANHO/PERDIDO/Reabrir alternam `isWon`/`isLost` entre renders.
+const { dealFixture } = vi.hoisted(() => ({
+  dealFixture: {
+    id: 'deal-1',
+    title: 'Pequeno Chapéu',
+    value: 1000,
+    status: 'stage-1',
+    boardId: 'board-1',
+    contactId: 'contact-1',
+    companyName: 'Moreira Comércio',
+    contactName: 'Fulano',
+    contactEmail: 'fulano@example.com',
+    stageLabel: 'Novo',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    probability: 50,
+    priority: 'medium',
+    owner: { name: 'Eu', avatar: '' },
+    tags: [],
+    items: [],
+    customFields: {},
+    isWon: false,
+    isLost: false,
+  },
+}));
+
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
   // Return the deal fixture for DEALS_VIEW_KEY (identified by enabled:false in DealDetailModal)
@@ -44,28 +72,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
     useQuery: (options: { enabled?: boolean }) => {
       if (options.enabled === false) {
         return {
-          data: [{
-            id: 'deal-1',
-            title: 'Pequeno Chapéu',
-            value: 1000,
-            status: 'stage-1',
-            boardId: 'board-1',
-            contactId: 'contact-1',
-            companyName: 'Moreira Comércio',
-            contactName: 'Fulano',
-            contactEmail: 'fulano@example.com',
-            stageLabel: 'Novo',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            probability: 50,
-            priority: 'medium',
-            owner: { name: 'Eu', avatar: '' },
-            tags: [],
-            items: [],
-            customFields: {},
-            isWon: false,
-            isLost: false,
-          }],
+          data: [dealFixture],
           isLoading: false,
         };
       }
@@ -233,6 +240,9 @@ describe('DealDetailModal', () => {
     // Default: sem boards (mesmo comportamento que o arquivo tinha antes desta task).
     vi.mocked(useBoards).mockReturnValue({ data: [], isLoading: false } as ReturnType<typeof useBoards>);
     vi.mocked(StageProgressBar).mockClear();
+    // Reset do fixture mutável (alguns testes abaixo alternam isWon/isLost).
+    dealFixture.isWon = false;
+    dealFixture.isLost = false;
   });
 
   it('does not crash when toggling open/close (hook order regression)', () => {
@@ -274,6 +284,67 @@ describe('DealDetailModal', () => {
 
     // Controle manual de estágio segue disponível (comportamento inalterado).
     expect(StageProgressBar).toHaveBeenCalled();
+  });
+
+  // Task 6 (expandida): em board de motor, o PortalActionPanel é o único write path de
+  // ESTADO (etapa/ganho/perdido) — GANHO, PERDIDO, Reabrir e Excluir precisam sumir do
+  // header, porque cada um escreve localmente e é sobrescrito no próximo full-refresh sync.
+  // `getByRole('button', ...)` (em vez de checar `document.body.textContent`) é proposital:
+  // o badge "✓ GANHO"/"✗ PERDIDO" (um <span>, não botão) contém o mesmo texto e não pode ser
+  // usado pra distinguir presença/ausência do BOTÃO.
+  describe('controles de estado (GANHO/PERDIDO/Reabrir/Excluir) — gating por regidoPor', () => {
+    it('esconde GANHO, PERDIDO e Excluir em board de motor (negócio aberto)', () => {
+      vi.mocked(useBoards).mockReturnValue({ data: [MOTOR_BOARD], isLoading: false } as ReturnType<typeof useBoards>);
+
+      render(<DealDetailModal dealId="deal-1" isOpen={true} onClose={() => {}} />);
+
+      expect(screen.queryByRole('button', { name: /GANHO/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /PERDIDO/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Excluir negócio/ })).not.toBeInTheDocument();
+    });
+
+    it('esconde Reabrir e Excluir em board de motor (negócio ganho)', () => {
+      dealFixture.isWon = true;
+      vi.mocked(useBoards).mockReturnValue({ data: [MOTOR_BOARD], isLoading: false } as ReturnType<typeof useBoards>);
+
+      render(<DealDetailModal dealId="deal-1" isOpen={true} onClose={() => {}} />);
+
+      // Badge de estado (read-only) segue visível — só o CONTROLE de reabrir some.
+      expect(document.body.textContent).toContain('✓ GANHO');
+      expect(screen.queryByRole('button', { name: /Reabrir/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Excluir negócio/ })).not.toBeInTheDocument();
+    });
+
+    it('esconde Reabrir e Excluir em board de motor (negócio perdido)', () => {
+      dealFixture.isLost = true;
+      vi.mocked(useBoards).mockReturnValue({ data: [MOTOR_BOARD], isLoading: false } as ReturnType<typeof useBoards>);
+
+      render(<DealDetailModal dealId="deal-1" isOpen={true} onClose={() => {}} />);
+
+      expect(document.body.textContent).toContain('✗ PERDIDO');
+      expect(screen.queryByRole('button', { name: /Reabrir/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Excluir negócio/ })).not.toBeInTheDocument();
+    });
+
+    it('mantém GANHO, PERDIDO e Excluir em board humano (negócio aberto) — guarda contra over-hiding', () => {
+      vi.mocked(useBoards).mockReturnValue({ data: [HUMANO_BOARD], isLoading: false } as ReturnType<typeof useBoards>);
+
+      render(<DealDetailModal dealId="deal-1" isOpen={true} onClose={() => {}} />);
+
+      expect(screen.getByRole('button', { name: /GANHO/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /PERDIDO/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Excluir negócio/ })).toBeInTheDocument();
+    });
+
+    it('mantém Reabrir e Excluir em board humano (negócio ganho) — guarda contra over-hiding', () => {
+      dealFixture.isWon = true;
+      vi.mocked(useBoards).mockReturnValue({ data: [HUMANO_BOARD], isLoading: false } as ReturnType<typeof useBoards>);
+
+      render(<DealDetailModal dealId="deal-1" isOpen={true} onClose={() => {}} />);
+
+      expect(screen.getByRole('button', { name: /Reabrir/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Excluir negócio/ })).toBeInTheDocument();
+    });
   });
 });
 

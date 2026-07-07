@@ -5,6 +5,11 @@ import { Building2, Hourglass, Trophy, XCircle } from 'lucide-react';
 import { ActivityStatusIcon } from './ActivityStatusIcon';
 import { priorityAriaLabelPtBr } from '@/lib/utils/priority';
 import { formatBRL } from '@/lib/utils/currency';
+import { useToast } from '@/context/ToastContext';
+
+/** Mensagem mostrada quando um drag é bloqueado em board de motor (ver `isMotor` abaixo). */
+const MOTOR_DRAG_BLOCKED_MESSAGE =
+  'Funil de motor: a etapa muda pelo registro de ação — abra a ficha.';
 
 interface DealCardProps {
   deal: DealView;
@@ -28,6 +33,13 @@ interface DealCardProps {
   setLastMouseDownDealId: (id: string | null) => void;
   /** Callback to open move-to-stage modal for keyboard accessibility */
   onMoveToStage?: (dealId: string) => void;
+  /**
+   * Boards regidos por `motor` são espelho do funil do portal (ver `Board.regidoPor` em
+   * types/types.ts): a etapa muda pelo registro de ação no PortalActionPanel, nunca por
+   * arraste manual — um full-refresh sync sobrescreve qualquer edição local. Quando true,
+   * o card fica non-draggable e uma tentativa de drag é bloqueada com um toast.
+   */
+  isMotor?: boolean;
 }
 
 // Check if deal is closed (won or lost)
@@ -58,9 +70,11 @@ const DealCardComponent: React.FC<DealCardProps> = ({
   onQuickAddActivity,
   setLastMouseDownDealId,
   onMoveToStage,
+  isMotor = false,
 }) => {
   const [localDragging, setLocalDragging] = useState(false);
   const isClosed = isDealClosed(deal);
+  const { addToast } = useToast();
 
   const handleToggleMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -72,6 +86,15 @@ const DealCardComponent: React.FC<DealCardProps> = ({
   };
 
   const handleDragStart = (e: React.DragEvent) => {
+    if (isMotor) {
+      // Funil de motor: a etapa muda pelo registro de ação no PortalActionPanel, nunca por
+      // arraste manual (ver DealDetailModal). `draggable={false}` abaixo já impede o
+      // navegador de iniciar o drag; este guard é defesa em profundidade (cobre disparo
+      // sintético do evento) e é onde a tentativa bloqueada vira feedback visível.
+      e.preventDefault();
+      addToast(MOTOR_DRAG_BLOCKED_MESSAGE, 'info');
+      return;
+    }
     setLocalDragging(true);
     e.dataTransfer.setData('dealId', deal.id);
     // Fallback mapping when optimistic temp id gets replaced mid-drag by a refetch.
@@ -82,6 +105,7 @@ const DealCardComponent: React.FC<DealCardProps> = ({
   };
 
   const handleDragEnd = () => {
+    if (isMotor) return; // Drag nunca deveria ter iniciado neste board; no-op defensivo.
     setLocalDragging(false);
   };
 
@@ -154,7 +178,7 @@ const DealCardComponent: React.FC<DealCardProps> = ({
   return (
     <div
       data-deal-id={deal.id}
-      draggable={!deal.id.startsWith('temp-')}
+      draggable={!isMotor && !deal.id.startsWith('temp-')}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onMouseDown={() => setLastMouseDownDealId(deal.id)}

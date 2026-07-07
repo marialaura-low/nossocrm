@@ -69,6 +69,12 @@ interface KanbanBoardProps {
   onMoveDealToStage?: (dealId: string, newStageId: string) => void;
   /** Exibe skeleton cards enquanto os dados carregam */
   isLoading?: boolean;
+  /**
+   * true quando o board ativo é regido por `motor` (espelho do funil do portal — ver
+   * `Board.regidoPor`). Propagado para cada `DealCard` pra desabilitar o drag manual;
+   * a etapa muda só pelo PortalActionPanel (ver DealDetailModal).
+   */
+  isMotor?: boolean;
 }
 /**
  * Componente React `KanbanBoard`.
@@ -116,6 +122,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   setLastMouseDownDealId,
   onMoveDealToStage,
   isLoading = false,
+  isMotor = false,
 }) => {
   const { data: lifecycleStages = [] } = useLifecycleStages();
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
@@ -313,6 +320,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     onQuickAddActivity={handleQuickAddActivity}
                     setLastMouseDownDealId={setLastMouseDownDealId}
                     onMoveToStage={onMoveDealToStage ? handleOpenMoveToStage : undefined}
+                    isMotor={isMotor}
                   />
                 </div>
               ))}
