@@ -81,6 +81,8 @@ export interface DbBoard {
   is_default: boolean;
   /** Template base usado. */
   template: string | null;
+  /** Quem rege este board: 'motor' (espelho de sistema externo, ex. funil do portal; drag desabilitado) ou 'humano' (kanban manual, padrão). */
+  regido_por: string;
   /** Estágio de lifecycle vinculado. */
   linked_lifecycle_stage: string | null;
   /** ID do próximo board na jornada. */
@@ -195,6 +197,7 @@ const transformBoard = (db: DbBoard, stages: DbBoardStage[]): Board => {
     description: db.description || undefined,
     isDefault: db.is_default,
     template: (db.template as Board['template']) || undefined,
+    regidoPor: (db.regido_por as Board['regidoPor']) ?? 'humano',
     linkedLifecycleStage: db.linked_lifecycle_stage || undefined,
     nextBoardId: db.next_board_id || undefined,
     wonStageId: db.won_stage_id || undefined,

@@ -337,6 +337,8 @@ export interface Board {
   stages: BoardStage[];
   isDefault?: boolean;
   template?: 'PRE_SALES' | 'SALES' | 'ONBOARDING' | 'CS' | 'CUSTOM'; // Template usado para criar este board
+  /** Quem rege este board: 'motor' = espelho de um sistema externo (ex.: funil do portal; drag desabilitado); 'humano' = kanban manual (padrão). */
+  regidoPor?: 'motor' | 'humano';
   automationSuggestions?: string[]; // Sugestões de automação da IA
 
   // AI Strategy Fields
