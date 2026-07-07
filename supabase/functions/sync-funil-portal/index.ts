@@ -94,7 +94,32 @@ async function sync() {
   }));
   for (let i = 0; i < ativs.length; i += 200) await dst("POST", "activities", ativs.slice(i, i + 200));
 
-  return { negocios: negocios.length, deals: criados.length, atividades: ativs.length, empresas_criadas: faltantes.length };
+  // Lei do pedido na casa vale em TODO board (spec união §3, ponte 1):
+  // cliente emitiu pedido nos últimos 8d → deal aberto dele em board HUMANO fecha como ganho.
+  const corte = new Date(Date.now() - 8 * 864e5).toISOString().slice(0, 10);
+  const emissores = new Set(
+    (await srcAll("sell_in", "cliente_matriz", `data_emissao=gte.${corte}`))
+      .map((r: any) => r.cliente_matriz).filter(Boolean)
+  );
+  const boardsHumanos = (await dstAll("boards", "id,regido_por"))
+    .filter((b: any) => b.regido_por !== "motor").map((b: any) => b.id);
+  const nomePorId = new Map(
+    (await dstAll("crm_companies", "id,name")).map((c: any) => [c.id, c.name])
+  );
+  const abertos = (await dstAll("deals", "id,client_company_id,board_id", "is_won=eq.false&is_lost=eq.false"))
+    .filter((d: any) => boardsHumanos.includes(d.board_id) && emissores.has(nomePorId.get(d.client_company_id)));
+  let ganhosAuto = 0;
+  for (const d of abertos) {
+    await dst("PATCH", `deals?id=eq.${d.id}`, { is_won: true, closed_at: new Date().toISOString() }, "return=minimal");
+    await dst("POST", "activities", [{
+      title: "Ganho automático: pedido na casa (lei do pedido)", type: "TASK",
+      date: new Date().toISOString(), completed: true, description: "sync:lei-pedido-na-casa",
+      deal_id: d.id, client_company_id: d.client_company_id, owner_id: OWNER, organization_id: ORG,
+    }], "return=minimal");
+    ganhosAuto++;
+  }
+
+  return { negocios: negocios.length, deals: criados.length, atividades: ativs.length, empresas_criadas: faltantes.length, ganhos_auto: ganhosAuto };
 }
 
 Deno.serve(async (req: Request) => {
