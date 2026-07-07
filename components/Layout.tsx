@@ -278,11 +278,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       >
         <div className={`h-16 flex items-center border-b border-[var(--color-border-subtle)] transition-all duration-300 px-5 ${sidebarCollapsed ? 'justify-center px-0' : 'justify-between'}`}>
           <div className={`flex items-center transition-all duration-300 ${sidebarCollapsed ? 'gap-0 justify-center' : 'gap-3'}`}>
-            <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-primary-500/20 shrink-0" aria-hidden="true">
-              N
+            <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center shadow-lg shadow-primary-500/20 shrink-0" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor" aria-hidden="true">
+                <path d="M11.4 21.5v-6.2c-1.9-.15-3.4-.9-4.5-2-1.3-1.35-2-3.15-2-5 0-.5.05-1 .15-1.45.85.9 1.85 1.4 2.85 1.55-.6-.9-.95-2-.95-3.15 0-1.5.6-2.95 1.55-4.05.55 1.35 1.5 2.4 2.6 3.05-.05-.3-.05-.6-.05-.9C11.55 1.7 12.35.4 13.5 0c-.35.95-.35 2 .05 2.95.55 1.3 1.6 2.25 2.8 2.7 1.75.65 3 1.85 3.6 3.35.3.75.45 1.55.45 2.35 0 1.85-.7 3.65-2 5-1.1 1.1-2.6 1.85-4.5 2v6.15h-2.5Z"/>
+              </svg>
             </div>
             <span className={`text-xl font-bold font-display tracking-tight text-slate-900 dark:text-white whitespace-nowrap overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-              NossoCRM
+              Macboot CRM
             </span>
           </div>
 
