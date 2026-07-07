@@ -98,6 +98,17 @@ async function sync() {
 }
 
 Deno.serve(async (req: Request) => {
+  // guard: exige x-sync-secret == sync_config.sync_secret (env de função não setável nesta infra)
+  const provided = req.headers.get("x-sync-secret") ?? "";
+  let expected = "";
+  try {
+    const rows = await dstAll("sync_config", "value", "key=eq.sync_secret");
+    expected = rows?.[0]?.value ?? "";
+  } catch (_) { /* se a tabela sumir, cai no 401 abaixo */ }
+  if (!expected || provided !== expected) {
+    return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
+  }
+
   try {
     const res = await sync();
     return new Response(JSON.stringify({ ok: true, ...res }), { headers: { "Content-Type": "application/json" } });
