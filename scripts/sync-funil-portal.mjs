@@ -88,7 +88,8 @@ async function main() {
   }
   if (faltantes.length) log(`Empresas criadas p/ negócios sem cadastro: ${faltantes.length}`);
 
-  // 3) FULL REFRESH: apaga deals de origem-portal e recria
+  // 3) FULL REFRESH: apaga atividades e deals de origem-portal e recria
+  await dst('DELETE', `activities?description=eq.sync:portal&organization_id=eq.${ORG}`);
   const antigos = await dstAll('deals', 'id,custom_fields', 'custom_fields->>portal_negocio_id=not.is.null');
   if (antigos.length) {
     for (let i = 0; i < antigos.length; i += 100) {
@@ -119,12 +120,26 @@ async function main() {
       owner_id: OWNER, organization_id: ORG,
     });
   }
+  const criados = [];
   for (let i = 0; i < rows.length; i += 200) {
-    await dst('POST', 'deals', rows.slice(i, i + 200));
+    const ret = await dst('POST', 'deals', rows.slice(i, i + 200), 'return=representation');
+    criados.push(...(ret || []));
     ok += Math.min(200, rows.length - i);
   }
-
   log(`Deals inseridos: ${ok}${semStage ? ` · pulados (etapa/funil desconhecido): ${semStage}` : ''}`);
+
+  // 5) próxima ação do portal -> atividade real no CRM (card reflete status real)
+  const ativs = criados
+    .filter((d) => d.custom_fields?.proxima_acao_em)
+    .map((d) => ({
+      title: 'Próxima ação (portal)', type: 'CALL',
+      date: `${d.custom_fields.proxima_acao_em}T12:00:00-03:00`, completed: false,
+      description: 'sync:portal', deal_id: d.id,
+      client_company_id: d.client_company_id || null,
+      owner_id: OWNER, organization_id: ORG,
+    }));
+  for (let i = 0; i < ativs.length; i += 200) await dst('POST', 'activities', ativs.slice(i, i + 200));
+  log(`Atividades de próxima ação criadas: ${ativs.length}`);
   log('Sync FIM');
 }
 

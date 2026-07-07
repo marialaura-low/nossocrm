@@ -4,6 +4,7 @@ import { DealCard } from './DealCard';
 import { isDealRotting, getActivityStatus } from '@/features/boards/hooks/useBoardsController';
 import { MoveToStageModal } from '../Modals/MoveToStageModal';
 import { SkeletonDealCard } from '@/components/ui/Skeleton';
+import { formatBRL } from '@/lib/utils/currency';
 import { useLifecycleStages } from '@/lib/query/hooks/useLifecycleStagesQuery';
 
 /**
@@ -253,7 +254,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               <div className="text-xs text-slate-500 dark:text-slate-400 font-medium text-right">
                 Total:{' '}
                 <span className="text-slate-900 dark:text-white font-mono">
-                  ${stageValue.toLocaleString()}
+                  {formatBRL(stageValue)}
                 </span>
               </div>
             </div>

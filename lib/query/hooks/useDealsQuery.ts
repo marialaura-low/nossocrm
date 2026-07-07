@@ -11,6 +11,7 @@ import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys, DEALS_VIEW_KEY } from '../index';
 import { dealsService, contactsService, companiesService, boardStagesService } from '@/lib/supabase';
+import { activitiesService } from '@/lib/supabase/activities';
 import { useAuth } from '@/context/AuthContext';
 import type { Deal, DealView, DealItem, Contact } from '@/types';
 
@@ -48,24 +49,40 @@ export const dealsViewQueryFn = async (
   const contactIds = deals.map(d => d.contactId).filter(Boolean);
   const companyIds = deals.map(d => d.clientCompanyId).filter(Boolean) as string[];
 
-  const [contactsResult, companiesResult] = await Promise.all([
+  const [contactsResult, companiesResult, activitiesResult] = await Promise.all([
     contactsService.getByIds(contactIds, { signal }),
     companiesService.getByIds(companyIds, { signal }),
+    activitiesService.getAll(),
   ]);
 
   const contactMap = new Map((contactsResult.data || []).map(c => [c.id, c]));
   const companyMap = new Map((companiesResult.data || []).map(c => [c.id, c]));
   const stageMap = new Map(stages.map(s => [s.id, s.label || s.name]));
 
+  // Próxima ação por deal: atividade incompleta e acionável mais próxima (para o status do card)
+  const ACTIONABLE = new Set(['CALL', 'MEETING', 'EMAIL', 'TASK']);
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const nextByDeal = new Map<string, { type: string; date: string }>();
+  for (const a of activitiesResult.data || []) {
+    if (a.completed || !a.dealId || !ACTIONABLE.has(a.type)) continue;
+    const cur = nextByDeal.get(a.dealId);
+    if (!cur || new Date(a.date) < new Date(cur.date)) nextByDeal.set(a.dealId, { type: a.type, date: a.date });
+  }
+
   return deals.map(deal => {
     const contact = contactMap.get(deal.contactId);
     const company = deal.clientCompanyId ? companyMap.get(deal.clientCompanyId) : undefined;
+    const na = nextByDeal.get(deal.id);
     return {
       ...deal,
       companyName: company?.name || 'Sem empresa',
       contactName: contact?.name || 'Sem contato',
       contactEmail: contact?.email || '',
       stageLabel: stageMap.get(deal.status) || 'Estágio não identificado',
+      nextActivity: na
+        ? { type: na.type as 'CALL' | 'MEETING' | 'EMAIL' | 'TASK', date: na.date, isOverdue: new Date(na.date) < startToday }
+        : deal.nextActivity,
     };
   });
 };
