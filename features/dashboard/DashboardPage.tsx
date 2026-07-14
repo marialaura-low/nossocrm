@@ -13,6 +13,7 @@ import { ActivityFeedItem } from './components/ActivityFeedItem';
 import { PipelineAlertsModal } from './components/PipelineAlertsModal';
 import { AIMetricsSection } from './components/AIMetricsSection';
 import { MessagingMetricsSection } from './components/MessagingMetricsSection';
+import { RecompraSegmentoSection } from './components/RecompraSegmentoSection';
 import { useDashboardMetrics, PeriodFilter, COMPARISON_LABELS } from './hooks/useDashboardMetrics';
 import { PeriodFilterSelect } from '@/components/filters/PeriodFilterSelect';
 import { LazyFunnelChart, ChartWrapper } from '@/components/charts';
@@ -286,6 +287,11 @@ const DashboardPage: React.FC = () => {
             <p className="text-xs text-slate-500 mt-2">Valor médio vitalício por cliente ativo.</p>
           </div>
         </div>
+      </div>
+
+      {/* Métricas Macboot (calçadista) — fusão: o que só o segmento lê, com dado real do portal */}
+      <div className="mb-6">
+        <RecompraSegmentoSection />
       </div>
 
       {/* Messaging Metrics Section */}
