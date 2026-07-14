@@ -7,11 +7,32 @@ import { DEALS_VIEW_KEY } from '@/lib/query';
 
 interface PortalActionPanelProps {
   dealId: string;
-  /** Papel do usuário logado. Reservado para o override manual de etapa (gestão) — task futura. */
+  /** Papel do usuário logado. Habilita o override manual de etapa (gestão). */
   isAdmin?: boolean;
+  /** Funil do portal (1=pós-venda, 2=reativação) — define as etapas de destino do override. */
+  funilId?: number;
   /** Chamado após um registro bem-sucedido (o cache de deals já foi invalidado). */
   onDone: () => void;
 }
+
+/**
+ * Etapas de destino do override, por funil do portal. Hardcoded (como MOTIVOS_PERDA e o mapa
+ * STAGE do sync) — a topologia dos 2 funis do portal é estável. Manter em sincronia com
+ * funil_etapas (portal): funil 1 = pós-venda, funil 2 = reativação.
+ */
+const ETAPAS_POR_FUNIL: Record<number, ReadonlyArray<{ slug: string; label: string }>> = {
+  1: [
+    { slug: 'chegou_bem', label: 'Chegou bem?' },
+    { slug: 'apoio', label: 'Apoio' },
+    { slug: 'giro_reposicao', label: 'Giro & reposição' },
+    { slug: 'diagnostico', label: 'Diagnóstico' },
+  ],
+  2: [
+    { slug: 'detectado', label: 'Detectado' },
+    { slug: 'contatado', label: 'Contatado' },
+    { slug: 'negociando', label: 'Negociando' },
+  ],
+};
 
 /**
  * Taxonomia real de motivo de perda (tabela `motivos_perda` do portal dos representantes).
@@ -25,6 +46,8 @@ const MOTIVOS_PERDA: ReadonlyArray<{ slug: string; label: string }> = [
   { slug: 'loja_fechou_encolheu', label: 'Loja fechou/encolheu' },
   { slug: 'troca_comprador', label: 'Troca de comprador' },
   { slug: 'inadimplencia_credito', label: 'Inadimplência/crédito' },
+  { slug: 'conflito_internet', label: 'Conflito com internet' },
+  { slug: 'fora_estrategia', label: 'Fora da estratégia' },
   { slug: 'outro', label: 'Outro' },
 ];
 
@@ -37,12 +60,15 @@ const MOTIVOS_PERDA: ReadonlyArray<{ slug: string; label: string }> = [
  *
  * @see DealDetailModal.tsx — decide quando renderizar este painel (board.regidoPor === 'motor').
  */
-export const PortalActionPanel: React.FC<PortalActionPanelProps> = ({ dealId, isAdmin, onDone }) => {
+export const PortalActionPanel: React.FC<PortalActionPanelProps> = ({ dealId, isAdmin, funilId, onDone }) => {
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [motivoSlug, setMotivoSlug] = useState<string>(MOTIVOS_PERDA[0].slug);
   const [obs, setObs] = useState('');
+  const [overrideEtapa, setOverrideEtapa] = useState('');
+  const [overrideMotivo, setOverrideMotivo] = useState('');
+  const etapasOverride = funilId ? ETAPAS_POR_FUNIL[funilId] ?? [] : [];
 
   const registrar = async (payload: Record<string, unknown>) => {
     if (busy) return;
@@ -148,10 +174,50 @@ export const PortalActionPanel: React.FC<PortalActionPanelProps> = ({ dealId, is
         </button>
       </div>
 
-      {isAdmin && (
-        <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
-          Override manual de etapa (gestão) — ainda não disponível nesta tela.
-        </p>
+      {isAdmin && etapasOverride.length > 0 && (
+        <div className="pt-3 border-t border-slate-100 dark:border-white/5 space-y-2">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            Override de gestão{' '}
+            <span className="font-normal normal-case">— move a etapa manualmente e fica registrado com seu carimbo</span>
+          </p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <label className="sr-only" htmlFor={`override-etapa-${dealId}`}>
+              Mover para
+            </label>
+            <select
+              id={`override-etapa-${dealId}`}
+              aria-label="Mover para"
+              value={overrideEtapa}
+              onChange={(e) => setOverrideEtapa(e.target.value)}
+              disabled={busy}
+              className="bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-xs dark:text-white outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+            >
+              <option value="">Mover para…</option>
+              {etapasOverride.map((et) => (
+                <option key={et.slug} value={et.slug}>
+                  {et.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              aria-label="Motivo do override"
+              value={overrideMotivo}
+              onChange={(e) => setOverrideMotivo(e.target.value)}
+              disabled={busy}
+              placeholder="Motivo (obrigatório)"
+              className="min-w-0 flex-1 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-xs dark:text-white outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+            />
+            <button
+              type="button"
+              disabled={busy || !overrideEtapa || !overrideMotivo.trim()}
+              onClick={() => registrar({ override: { para_etapa_slug: overrideEtapa, motivo: overrideMotivo.trim() } })}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 dark:bg-white/10 dark:hover:bg-white/20 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Mover (gestão)
+            </button>
+          </div>
+        </div>
       )}
 
       {error && (

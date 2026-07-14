@@ -52,6 +52,13 @@ describe('PortalActionPanel', () => {
     expect(screen.getByText('Perdido')).toBeInTheDocument();
   });
 
+  it('inclui os motivos conflito_internet e fora_estrategia (sincronia com a taxonomia do portal)', () => {
+    renderPanel();
+    // motivos_perda do portal (migration 021) — o painel tem que oferecer os 2 que o Plaud 07/07 acrescentou
+    expect(screen.getByRole('option', { name: 'Conflito com internet' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Fora da estratégia' })).toBeInTheDocument();
+  });
+
   it('clicar em "Falei — ficou pendência" faz POST /api/portal-action com {dealId, resultado} e chama onDone no sucesso', async () => {
     const fetchMock = stubFetchOnce({ ok: true, efeito: 'retry:+5d' });
     const onDone = vi.fn();
@@ -81,6 +88,40 @@ describe('PortalActionPanel', () => {
     expect(body.dealId).toBe('deal-1');
     expect(body.resultado).toBe('perdido');
     expect(body.motivo_slug).toBeTruthy();
+  });
+
+  // ── Override de gestão (spec união §3, ponte 2 — só admin) ──────────────────
+
+  it('não mostra o override de gestão quando não é admin', () => {
+    renderPanel({ funilId: 1 });
+    expect(screen.queryByText('Override de gestão')).not.toBeInTheDocument();
+  });
+
+  it('admin vê o override com as etapas do funil (pós-venda)', () => {
+    renderPanel({ isAdmin: true, funilId: 1 });
+    expect(screen.getByText('Override de gestão')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Chegou bem?' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Giro & reposição' })).toBeInTheDocument();
+  });
+
+  it('override fica bloqueado sem motivo e envia {override} com etapa+motivo', async () => {
+    const fetchMock = stubFetchOnce({ ok: true, efeito: 'override' });
+    const onDone = vi.fn();
+    renderPanel({ isAdmin: true, funilId: 1, onDone });
+
+    const btn = screen.getByRole('button', { name: 'Mover (gestão)' });
+    expect(btn).toBeDisabled(); // sem etapa+motivo
+
+    fireEvent.change(screen.getByLabelText('Mover para'), { target: { value: 'apoio' } });
+    fireEvent.change(screen.getByLabelText('Motivo do override'), { target: { value: 'motor errou' } });
+    expect(btn).toBeEnabled();
+
+    fireEvent.click(btn);
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(bodyOf(fetchMock)).toEqual({
+      dealId: 'deal-1',
+      override: { para_etapa_slug: 'apoio', motivo: 'motor errou' },
+    });
   });
 
   it('mostra o texto de erro retornado pela API e não chama onDone quando a chamada falha', async () => {

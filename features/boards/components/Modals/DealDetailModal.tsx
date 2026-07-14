@@ -672,6 +672,7 @@ export const DealDetailModal: React.FC<DealDetailModalProps> = ({ dealId, isOpen
                 <PortalActionPanel
                   dealId={deal.id}
                   isAdmin={profile?.role === 'admin'}
+                  funilId={Number((deal.customFields as Record<string, unknown> | undefined)?.funil_id) || undefined}
                   onDone={() => addToast('Ação registrada.', 'success')}
                 />
               </div>
