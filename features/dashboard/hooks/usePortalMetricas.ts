@@ -27,9 +27,23 @@ export interface Receita {
   total: Omit<CanalFechamento, 'canal'>;
 }
 
+export interface PilarPositivacao {
+  pilar: 'retencao' | 'reativacao' | 'novo' | string;
+  clientes: number;
+  pares: number;
+}
+
+export interface Positivacao {
+  periodo: { inicio: string; fim: string };
+  escritorio: string | null;
+  pilares: PilarPositivacao[];
+  total: { clientes: number; pares: number };
+}
+
 export interface PortalMetricas {
   recompra_segmento: RecompraRow[] | null;
   receita: Receita | null;
+  positivacao: Positivacao | null;
 }
 
 export function usePortalMetricas(params?: { inicio?: string; fim?: string; escritorio?: string }) {

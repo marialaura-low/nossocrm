@@ -67,6 +67,19 @@ function somaCanais(canais: CanalFechamento[]) {
   return { ...t, valor_emitido: round2(t.valor_emitido), valor_entregue: round2(t.valor_entregue) };
 }
 
+interface PilarPositivacao {
+  pilar: string;
+  clientes: number;
+  pares: number;
+}
+
+function somaPilares(pilares: PilarPositivacao[]) {
+  return pilares.reduce(
+    (a, p) => ({ clientes: a.clientes + (p.clientes || 0), pares: a.pares + (p.pares || 0) }),
+    { clientes: 0, pares: 0 },
+  );
+}
+
 export async function GET(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -76,16 +89,19 @@ export async function GET(request: Request) {
   const def = mesCorrente();
   const inicio = searchParams.get('inicio') || def.inicio;
   const fim = searchParams.get('fim') || def.fim;
+  const escritorio = searchParams.get('escritorio'); // micro→macro: presente = 1 escritório
 
-  // recompra ≤120d por segmento — funil_baseline (calculado no portal, migration 018)
-  // receita — RPC canônica fechamento_comercial (emissão sell_in × entrega faturamento)
-  const [recompraR, receitaR] = await Promise.allSettled([
+  // recompra ≤120d por segmento — funil_baseline (macro; migration 018)
+  // receita — RPC fechamento_comercial (emissão × entrega; macro, não aceita escritório ainda)
+  // positivação 3 pilares — RPC positivacao_mensal (aceita escritório: micro→macro real)
+  const [recompraR, receitaR, positivacaoR] = await Promise.allSettled([
     portalGet('/funil_baseline?select=segmento,janela,pct,n&order=n.desc'),
     portalRpc('fechamento_comercial', { inicio, fim }),
+    portalRpc('positivacao_mensal', { inicio, fim, p_escritorio: escritorio }),
   ]);
 
-  if (recompraR.status === 'rejected' && receitaR.status === 'rejected') {
-    console.error('[portal-metricas] recompra:', recompraR.reason, 'receita:', receitaR.reason);
+  if (recompraR.status === 'rejected' && receitaR.status === 'rejected' && positivacaoR.status === 'rejected') {
+    console.error('[portal-metricas] tudo falhou:', recompraR.reason, receitaR.reason, positivacaoR.reason);
     return NextResponse.json({ error: 'erro ao buscar métricas do portal' }, { status: 502 });
   }
 
@@ -97,8 +113,17 @@ export async function GET(request: Request) {
     console.error('[portal-metricas] receita:', receitaR.reason);
   }
 
+  let positivacao: { periodo: { inicio: string; fim: string }; escritorio: string | null; pilares: PilarPositivacao[]; total: ReturnType<typeof somaPilares> } | null = null;
+  if (positivacaoR.status === 'fulfilled') {
+    const pilares = positivacaoR.value as PilarPositivacao[];
+    positivacao = { periodo: { inicio, fim }, escritorio, pilares, total: somaPilares(pilares) };
+  } else {
+    console.error('[portal-metricas] positivacao:', positivacaoR.reason);
+  }
+
   return NextResponse.json({
     recompra_segmento: recompraR.status === 'fulfilled' ? recompraR.value : null,
     receita,
+    positivacao,
   });
 }
