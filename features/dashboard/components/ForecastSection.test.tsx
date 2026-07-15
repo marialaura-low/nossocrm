@@ -22,6 +22,10 @@ const forecast = {
   atingimento_fechado: 0.932,
   projecao_ano: 159265,
   gap_ano: -11666,
+  meta_restante: 88000,
+  esforco_restante: 1.064,
+  super_meta: null,
+  esforco_super: null,
   serie: [
     { mes: 1, meta: 13431, realizado: 12540 },
     { mes: 2, meta: 6100, realizado: 16339 },
@@ -41,18 +45,32 @@ const forecast = {
 describe('ForecastSection', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('mostra projeção do ano, % da meta e gap (ritmo dos meses fechados)', async () => {
+  it('meta é a âncora; tendência e gap ao lado; linha de esforço dos meses restantes', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ forecast }) })));
     renderIt();
 
-    // projeção do ano
-    await waitFor(() => expect(screen.getByText(/159\.265/)).toBeInTheDocument());
-    // meta do ano
-    expect(screen.getByText(/170\.931/)).toBeInTheDocument();
-    // gap negativo (abaixo da meta)
+    // espera o DADO chegar (o título renderiza antes do fetch resolver)
+    await waitFor(() => expect(screen.getByText(/170\.931/)).toBeInTheDocument());
+    expect(screen.getByText('Forecast Atacado')).toBeInTheDocument();
+    expect(screen.getByText(/159\.265/)).toBeInTheDocument();
+    expect(screen.getByText(/meta do ano · compromisso/)).toBeInTheDocument();
+    expect(screen.getByText(/tendência · no ritmo atual/)).toBeInTheDocument();
+    // gap e atingimento dos fechados
     expect(screen.getByText(/11\.666/)).toBeInTheDocument();
-    // atingimento dos fechados (93%)
     expect(screen.getByText(/93%/)).toBeInTheDocument();
+    // linha de AÇÃO: esforço dos meses restantes (106% do plano deles)
+    expect(screen.getByText(/106%/)).toBeInTheDocument();
+    // sem super meta cadastrada → não mostra
+    expect(screen.queryByText(/super meta/i)).not.toBeInTheDocument();
+  });
+
+  it('mostra a super meta quando cadastrada (alvo esticado, com esforço próprio)', async () => {
+    const comSuper = { ...forecast, super_meta: 180000, esforco_super: 1.167 };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ forecast: comSuper }) })));
+    renderIt();
+
+    await waitFor(() => expect(screen.getByText(/Super meta 180\.000/)).toBeInTheDocument());
+    expect(screen.getByText(/117% do plano restante/)).toBeInTheDocument();
   });
 
   it('não quebra quando o forecast vem nulo', async () => {

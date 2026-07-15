@@ -5,10 +5,13 @@ import { Target } from 'lucide-react';
 import { usePortalMetricas, type ForecastMes } from '../hooks/usePortalMetricas';
 
 /**
- * Forecast B2B — pacing vs plano. Projeta o ano pelo ritmo dos meses FECHADOS
- * (exclui o mês corrente, parcial) e por RAZÃO (respeita a sazonalidade da curva).
- * Curva de meta = "demanda disponível" da projeção da Low (editável, tabela metas_mensais);
- * realizado = emissão B2B (v_sell_in_canal). Emissão, não entrega.
+ * Forecast Atacado — pacing vs plano, em três camadas (decisão Low 14/07):
+ *   META      = o compromisso do ano (âncora; não muda com o ritmo);
+ *   TENDÊNCIA = onde o ano fecha SE o ritmo dos meses fechados continuar;
+ *   ESFORÇO   = o que os meses restantes precisam rodar vs o plano deles pra
+ *               ainda bater a meta — a linha de ação.
+ * Super meta (editável, opcional): alvo esticado acima do compromisso.
+ * Realizado = emissão B2B (v_sell_in_canal). Emissão, não entrega.
  */
 const nf = new Intl.NumberFormat('pt-BR');
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -25,12 +28,12 @@ export const ForecastSection: React.FC = () => {
       <div className="flex items-baseline justify-between mb-1">
         <h3 className="text-sm font-bold text-slate-700 dark:text-white flex items-center gap-2">
           <Target size={16} className="text-primary-600 dark:text-primary-400" aria-hidden="true" />
-          Forecast B2B
+          Forecast Atacado
         </h3>
-        <span className="text-[11px] text-slate-400 uppercase tracking-wide">pares · atacado · emissão</span>
+        <span className="text-[11px] text-slate-400 uppercase tracking-wide">pares · emissão</span>
       </div>
       <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4">
-        Onde o ano fecha no ritmo dos meses já fechados — meta vs realizado, mês a mês.
+        A meta é o compromisso; a tendência é onde o ano fecha no ritmo atual.
       </p>
 
       {isError && <p className="text-xs text-red-500">Não consegui puxar o forecast do portal agora.</p>}
@@ -41,30 +44,45 @@ export const ForecastSection: React.FC = () => {
 
       {f && (
         <>
-          <div className="flex items-end gap-6 mb-1">
+          <div className="flex items-end gap-6 mb-1 flex-wrap">
             <div>
-              <p className="text-3xl font-bold text-slate-800 dark:text-white leading-none">
-                {f.projecao_ano != null ? nf.format(f.projecao_ano) : '—'}
-              </p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">projeção do ano</p>
+              <p className="text-3xl font-bold text-slate-800 dark:text-white leading-none">{nf.format(f.meta_ano)}</p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">meta do ano · compromisso</p>
             </div>
             <div>
-              <p className="text-xl font-bold text-slate-500 dark:text-slate-400 leading-none">{nf.format(f.meta_ano)}</p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">meta do ano</p>
+              <p className={`text-2xl font-bold leading-none ${noAlvo ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                {f.projecao_ano != null ? nf.format(f.projecao_ano) : '—'}
+              </p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">tendência · no ritmo atual</p>
             </div>
             {f.gap_ano != null && (
               <div>
-                <p className={`text-xl font-bold leading-none ${noAlvo ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                <p className={`text-2xl font-bold leading-none ${noAlvo ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
                   {f.gap_ano >= 0 ? '+' : '−'}{nf.format(Math.abs(f.gap_ano))}
                 </p>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">gap vs meta</p>
               </div>
             )}
           </div>
+
           {f.atingimento_fechado != null && (
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">
               Base: {f.meses_fechados} meses fechados a <b className="text-slate-600 dark:text-slate-300">{Math.round(f.atingimento_fechado * 100)}%</b> do plano
               ({nf.format(f.realizado_fechado)} de {nf.format(f.meta_fechado)} pares).
+            </p>
+          )}
+          {f.esforco_restante != null && (
+            <p className="text-xs mt-1.5 mb-4 font-medium text-slate-600 dark:text-slate-300">
+              Pra bater a meta, os meses restantes precisam rodar a{' '}
+              <b className={f.esforco_restante > 1 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
+                {Math.round(f.esforco_restante * 100)}%
+              </b>{' '}
+              do plano deles ({nf.format(Math.max(0, f.meta_ano - f.realizado_fechado))} de {nf.format(f.meta_restante)} pares planejados).
+            </p>
+          )}
+          {f.super_meta != null && f.esforco_super != null && (
+            <p className="text-[11px] -mt-2 mb-4 text-slate-400 dark:text-slate-500">
+              Super meta {nf.format(f.super_meta)}: exige {Math.round(f.esforco_super * 100)}% do plano restante.
             </p>
           )}
 

@@ -81,7 +81,26 @@ export interface Forecast {
   atingimento_fechado: number | null;
   projecao_ano: number | null;
   gap_ano: number | null;
+  meta_restante: number;
+  esforco_restante: number | null;
+  super_meta: number | null;
+  esforco_super: number | null;
   serie: ForecastMes[];
+}
+
+export interface Conversao {
+  periodo: { inicio: string; fim: string };
+  escritorio: string | null;
+  ganhos: number;
+  fechados: number;
+  pct: number | null;
+}
+
+export interface LtvReceita {
+  escritorio: string | null;
+  ltv: number;
+  clientes: number;
+  desde: string;
 }
 
 export interface PortalMetricas {
@@ -91,6 +110,8 @@ export interface PortalMetricas {
   intensidade: Intensidade | null;
   aquisicao: Aquisicao | null;
   forecast: Forecast | null;
+  conversao: Conversao | null;
+  ltv: LtvReceita | null;
 }
 
 export function usePortalMetricas(params?: { inicio?: string; fim?: string; escritorio?: string }) {

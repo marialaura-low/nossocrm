@@ -70,8 +70,12 @@ const emissaoB2B = [
   { mes: '2026-07-01', pares: 3398, valor: 679481.72 },
 ]
 
+const conversaoFunil = [{ ganhos: 15, fechados: 263, pct: 5.7 }]
+
+const ltvReceita = [{ ltv: 49433.77, clientes: 1906, desde: '2023-01-01' }]
+
 /** roteia o fetch mockado por URL: funil_baseline (GET) x RPCs (POST). */
-function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; positivacao?: unknown; intensidade?: unknown; aquisicao?: unknown; emissao?: unknown; baselineOk?: boolean; fechamentoOk?: boolean; positivacaoOk?: boolean; intensidadeOk?: boolean; aquisicaoOk?: boolean; emissaoOk?: boolean } = {}) {
+function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; positivacao?: unknown; intensidade?: unknown; aquisicao?: unknown; emissao?: unknown; conversao?: unknown; ltv?: unknown; baselineOk?: boolean; fechamentoOk?: boolean; positivacaoOk?: boolean; intensidadeOk?: boolean; aquisicaoOk?: boolean; emissaoOk?: boolean } = {}) {
   const fetchMock = vi.fn(async (url: string) => {
     if (String(url).includes('/rpc/fechamento_comercial')) {
       return { ok: over.fechamentoOk ?? true, status: 200, json: async () => over.fechamento ?? fechamento }
@@ -87,6 +91,12 @@ function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; posit
     }
     if (String(url).includes('/rpc/emissao_mensal_b2b')) {
       return { ok: over.emissaoOk ?? true, status: 200, json: async () => over.emissao ?? emissaoB2B }
+    }
+    if (String(url).includes('/rpc/conversao_funil')) {
+      return { ok: true, status: 200, json: async () => over.conversao ?? conversaoFunil }
+    }
+    if (String(url).includes('/rpc/ltv_receita')) {
+      return { ok: true, status: 200, json: async () => over.ltv ?? ltvReceita }
     }
     return { ok: over.baselineOk ?? true, status: 200, json: async () => over.baseline ?? baseline }
   })
@@ -231,6 +241,45 @@ describe('GET /api/portal-metricas', () => {
     expect(body.forecast.serie[0]).toEqual({ mes: 1, meta: 13431, realizado: 12540 })
     expect(typeof body.forecast.projecao_ano).toBe('number')
     expect(body.forecast.atingimento_fechado).toBeGreaterThan(0)
+  })
+
+  it('expõe conversão do funil e LTV-receita com dado do portal', async () => {
+    stubPortalFetch()
+    supabaseClientMock = supaMock()
+    const res = await GET(req())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.conversao).toMatchObject({ ganhos: 15, fechados: 263, pct: 5.7 })
+    expect(body.ltv).toMatchObject({ ltv: 49433.77, clientes: 1906, desde: '2023-01-01' })
+  })
+
+  it('forecast traz o esforço restante (o que os meses em jogo precisam rodar vs o plano)', async () => {
+    stubPortalFetch()
+    supabaseClientMock = supaMock()
+    const res = await GET(req())
+    const body = await res.json()
+
+    // meta_restante = plano do mês corrente até dez; esforço = (meta_ano − fechado) / meta_restante
+    expect(body.forecast.meta_restante).toBeGreaterThan(0)
+    const esperado = (body.forecast.meta_ano - body.forecast.realizado_fechado) / body.forecast.meta_restante
+    expect(body.forecast.esforco_restante).toBeCloseTo(esperado, 2)
+    // sem super meta cadastrada → null (não fabrica alvo)
+    expect(body.forecast.super_meta).toBeNull()
+  })
+
+  it('super meta editável entra no forecast quando cadastrada (alvo esticado, com esforço próprio)', async () => {
+    stubPortalFetch()
+    supabaseClientMock = supaMock([
+      { indicador: 'novos', meta_ano: 308 },
+      { indicador: 'super_pares_b2b', meta_ano: 180000 },
+    ])
+    const res = await GET(req())
+    const body = await res.json()
+
+    expect(body.forecast.super_meta).toBe(180000)
+    const esperado = (180000 - body.forecast.realizado_fechado) / body.forecast.meta_restante
+    expect(body.forecast.esforco_super).toBeCloseTo(esperado, 2)
   })
 
   it('forecast vem null quando não há curva de meta cadastrada', async () => {

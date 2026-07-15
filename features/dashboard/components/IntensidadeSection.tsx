@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Wallet, Receipt, Repeat } from 'lucide-react';
+import { Wallet, Receipt, Repeat, Boxes } from 'lucide-react';
 import { formatBRL } from '@/lib/utils/currency';
 import { usePortalMetricas } from '../hooks/usePortalMetricas';
 
@@ -13,6 +13,7 @@ import { usePortalMetricas } from '../hooks/usePortalMetricas';
  * por cliente. Aceita escritório → micro→macro.
  */
 const nf2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nf0 = new Intl.NumberFormat('pt-BR');
 
 const Metrica: React.FC<{
   titulo: string;
@@ -41,10 +42,10 @@ export const IntensidadeSection: React.FC = () => {
     <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm">
       <div className="flex items-baseline justify-between mb-1">
         <h3 className="text-sm font-bold text-slate-700 dark:text-white">Intensidade de compra</h3>
-        <span className="text-[11px] text-slate-400 uppercase tracking-wide">ARPU = ticket × frequência</span>
+        <span className="text-[11px] text-slate-400 uppercase tracking-wide">mês corrente</span>
       </div>
       <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4">
-        Quanto cada cliente rende, o tamanho do pedido e quantas vezes compra no mês.
+        Quanto cada cliente rende no mês (= ticket × frequência), o tamanho do pedido, quantas vezes compra e a grade média.
       </p>
 
       {isError && <p className="text-xs text-red-500">Não consegui puxar a intensidade do portal agora.</p>}
@@ -55,12 +56,12 @@ export const IntensidadeSection: React.FC = () => {
 
       {i && (
         <>
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap">
             <Metrica
-              titulo="ARPU"
-              hint="receita ÷ clientes"
+              titulo="Receita por cliente"
+              hint="ARPU · receita ÷ clientes"
               valor={formatBRL(i.arpu)}
-              sub="por cliente"
+              sub="por cliente no mês"
               icon={<Wallet size={15} aria-hidden="true" />}
               accent="text-primary-600 dark:text-primary-400"
             />
@@ -76,9 +77,17 @@ export const IntensidadeSection: React.FC = () => {
               titulo="Frequência"
               hint="pedidos ÷ clientes"
               valor={nf2.format(i.frequencia)}
-              sub="pedidos/cliente"
+              sub="pedidos/cliente no mês"
               icon={<Repeat size={15} aria-hidden="true" />}
               accent="text-sky-600 dark:text-sky-400"
+            />
+            <Metrica
+              titulo="Grade média"
+              hint="pares ÷ pedidos"
+              valor={i.pedidos > 0 ? nf0.format(Math.round(i.pares / i.pedidos)) : '—'}
+              sub="pares/pedido"
+              icon={<Boxes size={15} aria-hidden="true" />}
+              accent="text-emerald-600 dark:text-emerald-400"
             />
           </div>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-4 pt-3 border-t border-slate-100 dark:border-white/5">

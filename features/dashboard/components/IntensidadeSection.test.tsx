@@ -28,18 +28,25 @@ const intensidade = {
 describe('IntensidadeSection', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('mostra ARPU, ticket médio e frequência (o trio ligado pela identidade)', async () => {
+  it('mostra receita/cliente (ARPU traduzido), ticket, frequência e grade média', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ intensidade }) })));
     renderIt();
 
-    await waitFor(() => expect(screen.getByText('ARPU')).toBeInTheDocument());
+    // título em português; a sigla vira apoio no hint (regra: jargão sempre traduzido)
+    await waitFor(() => expect(screen.getByText('Receita por cliente')).toBeInTheDocument());
+    expect(screen.getByText(/ARPU · receita ÷ clientes/)).toBeInTheDocument();
     expect(screen.getByText('Ticket médio')).toBeInTheDocument();
     expect(screen.getByText('Frequência')).toBeInTheDocument();
-    // ARPU e ticket em R$
+    // valores em R$
     expect(screen.getByText(/28\.105,15/)).toBeInTheDocument();
     expect(screen.getByText(/13\.441,59/)).toBeInTheDocument();
-    // frequência (pedidos/cliente)
+    // frequência explicitamente mensal
     expect(screen.getByText(/2,09/)).toBeInTheDocument();
+    expect(screen.getByText('pedidos/cliente no mês')).toBeInTheDocument();
+    // grade média = pares ÷ pedidos (17.409/253 ≈ 69 pares/pedido)
+    expect(screen.getByText('Grade média')).toBeInTheDocument();
+    expect(screen.getByText('69')).toBeInTheDocument();
+    expect(screen.getByText('pares/pedido')).toBeInTheDocument();
   });
 
   it('não quebra quando a intensidade vem nula', async () => {

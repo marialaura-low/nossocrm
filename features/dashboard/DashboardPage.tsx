@@ -20,6 +20,9 @@ import { IntensidadeSection } from './components/IntensidadeSection';
 import { AquisicaoSection } from './components/AquisicaoSection';
 import { ForecastSection } from './components/ForecastSection';
 import { useDashboardMetrics, PeriodFilter, COMPARISON_LABELS } from './hooks/useDashboardMetrics';
+import { usePortalMetricas } from './hooks/usePortalMetricas';
+import { periodoParaIntervalo } from './lib/periodo';
+import { formatBRL } from '@/lib/utils/currency';
 import { PeriodFilterSelect } from '@/components/filters/PeriodFilterSelect';
 import { LazyFunnelChart, ChartWrapper } from '@/components/charts';
 import { SkeletonStatCard } from '@/components/ui/Skeleton';
@@ -106,8 +109,15 @@ const DashboardPage: React.FC = () => {
   // Formatar variações para exibição
   const pipelineChangeInfo = formatChange(changes.pipeline);
   const dealsChangeInfo = formatChange(changes.deals);
-  const winRateChangeInfo = formatChange(changes.winRate);
-  const revenueChangeInfo = formatChange(changes.revenue);
+
+  // Fusão nos cards do topo: Conversão, Receita e LTV leem o MIOLO do portal
+  // (dado real, honrando o filtro de período). Pipeline/Negócios ficam no espelho
+  // do funil (que já é real). winRate/wonRevenue dos deals-espelho saem de cena.
+  const intervalo = periodoParaIntervalo(period);
+  const { data: portal } = usePortalMetricas(intervalo);
+  const conversaoPortal = portal?.conversao ?? null;
+  const receitaPortal = portal?.receita ?? null;
+  const ltvPortal = portal?.ltv ?? null;
 
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)] space-y-4">
@@ -181,24 +191,24 @@ const DashboardPage: React.FC = () => {
             comparisonLabel={COMPARISON_LABELS[period]}
           />
           <StatCard
-            title="Conversão"
-            value={`${winRate.toFixed(1)}%`}
-            subtext={winRateChangeInfo.text}
-            subtextPositive={winRateChangeInfo.isPositive}
+            title="Conversão do funil"
+            value={conversaoPortal?.pct != null ? `${conversaoPortal.pct.toFixed(1)}%` : '—'}
+            subtext={conversaoPortal ? `${conversaoPortal.ganhos} ganhos de ${conversaoPortal.fechados} fechados` : 'carregando do portal…'}
+            subtextPositive={(conversaoPortal?.ganhos ?? 0) > 0}
             icon={Target}
             variant="success"
-            onClick={() => router.push('/reports')}
-            comparisonLabel={COMPARISON_LABELS[period]}
+            onClick={() => router.push('/boards')}
+            comparisonLabel=""
           />
           <StatCard
-            title="Receita (Ganha)"
-            value={`$${wonRevenue.toLocaleString()}`}
-            subtext={revenueChangeInfo.text}
-            subtextPositive={revenueChangeInfo.isPositive}
+            title="Receita (emissão)"
+            value={receitaPortal ? formatBRL(receitaPortal.total.valor_emitido) : '—'}
+            subtext={receitaPortal ? `${receitaPortal.total.pares_emitidos.toLocaleString('pt-BR')} pares emitidos` : 'carregando do portal…'}
+            subtextPositive={(receitaPortal?.total.valor_emitido ?? 0) > 0}
             icon={TrendingUp}
             variant="warning"
-            onClick={() => router.push('/boards?status=won&view=list')}
-            comparisonLabel={COMPARISON_LABELS[period]}
+            onClick={() => router.push('/reports')}
+            comparisonLabel=""
           />
         </div>
       )}
@@ -281,15 +291,19 @@ const DashboardPage: React.FC = () => {
 
           <div className="glass p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-sm">
             <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">
-              LTV Médio
+              LTV (receita por cliente)
             </h3>
             <div className="flex items-end gap-2">
               <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                ${(avgLTV / 1000).toFixed(1)}k
+                {ltvPortal ? formatBRL(ltvPortal.ltv) : '—'}
               </span>
-              <span className="text-xs text-green-500 font-bold mb-1">Médio</span>
+              {ltvPortal && <span className="text-xs text-green-500 font-bold mb-1">atacado</span>}
             </div>
-            <p className="text-xs text-slate-500 mt-2">Valor médio vitalício por cliente ativo.</p>
+            <p className="text-xs text-slate-500 mt-2">
+              {ltvPortal
+                ? `Receita média acumulada por cliente (matriz) desde ${ltvPortal.desde.slice(0, 4)} · ${ltvPortal.clientes.toLocaleString('pt-BR')} clientes.`
+                : 'Carregando do portal…'}
+            </p>
           </div>
         </div>
       </div>
