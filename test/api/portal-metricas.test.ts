@@ -285,6 +285,28 @@ describe('GET /api/portal-metricas', () => {
     expect(body.positivacao.carteira).toEqual({ positivados: 48, carteira: 752, pct: 6.4 })
   })
 
+  it('com ?escritorio: receita usa a função por escritório + propaga p_escritorio nas RPCs que recortam', async () => {
+    const fetchMock = stubPortalFetch()
+    supabaseClientMock = supaMock()
+    await GET(req('?escritorio=' + encodeURIComponent('REP GO REPRESENTACAO COMERCIAL LTDA')))
+
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/rpc/fechamento_comercial_escritorio'))).toBe(true)
+    // churn (que recorta) recebeu o escritório no corpo
+    const churn = fetchMock.mock.calls.find((c) => String(c[0]).includes('/rpc/churn_clientes'))
+    expect(JSON.parse((churn![1] as RequestInit).body as string)).toMatchObject({ p_escritorio: 'REP GO REPRESENTACAO COMERCIAL LTDA' })
+  })
+
+  it('sem escritorio: receita usa a canônica fechamento_comercial (macro, fonte única dos outros agentes)', async () => {
+    const fetchMock = stubPortalFetch()
+    supabaseClientMock = supaMock()
+    await GET(req())
+
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.endsWith('/rpc/fechamento_comercial'))).toBe(true)
+    expect(urls.some((u) => u.includes('fechamento_comercial_escritorio'))).toBe(false)
+  })
+
   it('forecast traz o esforço restante (o que os meses em jogo precisam rodar vs o plano)', async () => {
     stubPortalFetch()
     supabaseClientMock = supaMock()

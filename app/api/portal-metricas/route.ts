@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { portalGet, portalRpc } from '@/lib/portal/rest';
 
 /**
  * GET /api/portal-metricas — fundação do dashboard-fusão.
@@ -13,30 +14,10 @@ import { createClient } from '@/lib/supabase/server';
  * Params:
  *   ?inicio=YYYY-MM-DD&fim=YYYY-MM-DD  período da receita (default: mês corrente).
  *   ?escritorio=<nome>                 micro→macro: presente = 1 escritório (rep),
- *                                      ausente = soma (gestão). Hoje as fontes anon
- *                                      são macro; o recorte por escritório depende de
- *                                      camada per-escritório no portal (frente própria,
- *                                      casa com a Onda 2 = rep com login).
+ *                                      ausente = soma (gestão). A maioria das RPCs
+ *                                      recorta por escritório; recompra (funil_baseline)
+ *                                      segue macro (baseline pré-computado).
  */
-async function portalGet(path: string): Promise<unknown> {
-  const key = process.env.PORTAL_ANON_KEY!;
-  const res = await fetch(`${process.env.PORTAL_REST_URL}${path}`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` },
-  });
-  if (!res.ok) throw new Error(`portal ${path} -> ${res.status}`);
-  return res.json();
-}
-
-async function portalRpc(fn: string, args: Record<string, unknown>): Promise<unknown> {
-  const key = process.env.PORTAL_ANON_KEY!;
-  const res = await fetch(`${process.env.PORTAL_REST_URL}/rpc/${fn}`, {
-    method: 'POST',
-    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(args),
-  });
-  if (!res.ok) throw new Error(`portal rpc ${fn} -> ${res.status}`);
-  return res.json();
-}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** Lê as metas editáveis do próprio Maré (tabela `metas`) → { indicador: meta_ano }. Macro = escritorio ''. */
@@ -210,10 +191,15 @@ export async function GET(request: Request) {
   // positivação 3 pilares + intensidade (ARPU/ticket/frequência) — RPCs com escritório: micro→macro real
   const ano = new Date().getFullYear();
   const mesAtual = new Date().getMonth() + 1; // 1-12
+  // Receita micro→macro: com escritório usa a função irmã (reconcilia com o macro);
+  // sem escritório usa a canônica (mesma fonte única dos outros agentes).
+  const receitaCall = escritorio
+    ? portalRpc('fechamento_comercial_escritorio', { inicio, fim, p_escritorio: escritorio })
+    : portalRpc('fechamento_comercial', { inicio, fim });
   const [portalResults, metas, curvaB2B] = await Promise.all([
     Promise.allSettled([
       portalGet('/funil_baseline?select=segmento,janela,pct,n&order=n.desc'),
-      portalRpc('fechamento_comercial', { inicio, fim }),
+      receitaCall,
       portalRpc('positivacao_mensal', { inicio, fim, p_escritorio: escritorio }),
       portalRpc('intensidade_compra_mensal', { inicio, fim, p_escritorio: escritorio }),
       portalRpc('aquisicao_mensal', { meses: mesesAno, p_escritorio: escritorio }),

@@ -3,6 +3,7 @@
 import React from 'react';
 import { TrendingUp } from 'lucide-react';
 import { usePortalMetricas } from '../hooks/usePortalMetricas';
+import { usePortalScope } from '../context/PortalScopeContext';
 
 /**
  * Recompra por segmento (≤120d) — a "métrica de ouro" da Macboot, no dashboard.
@@ -22,6 +23,7 @@ const SEG_LABELS: Record<string, string> = {
 
 export const RecompraSegmentoSection: React.FC = () => {
   const { data, isLoading, isError } = usePortalMetricas();
+  const { escritorio } = usePortalScope();
 
   const all = data?.recompra_segmento ?? [];
   const rows = all.filter((r) => r.segmento !== 'TOTAL');
@@ -39,6 +41,12 @@ export const RecompraSegmentoSection: React.FC = () => {
       <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4">
         % de clientes que recompraram em até 120 dias da entrega — a alavanca do pós-venda, por tipo de cliente.
       </p>
+
+      {escritorio && (
+        <p className="text-[11px] text-amber-600 dark:text-amber-400 mb-3 -mt-2">
+          Leitura macro (carteira toda) — o baseline por segmento ainda não decupla por escritório.
+        </p>
+      )}
 
       {isError && <p className="text-xs text-red-500">Não consegui puxar do portal agora.</p>}
       {isLoading && <p className="text-xs text-slate-400 dark:text-slate-500">Carregando do portal…</p>}

@@ -21,8 +21,10 @@ import { IntensidadeSection } from './components/IntensidadeSection';
 import { AquisicaoSection } from './components/AquisicaoSection';
 import { ForecastSection } from './components/ForecastSection';
 import { useDashboardMetrics, PeriodFilter, COMPARISON_LABELS } from './hooks/useDashboardMetrics';
-import { usePortalMetricas } from './hooks/usePortalMetricas';
+import { usePortalMetricas, usePortalEscritorios } from './hooks/usePortalMetricas';
 import { periodoParaIntervalo } from './lib/periodo';
+import { nomeEscritorio } from './lib/escritorio';
+import { PortalScopeProvider } from './context/PortalScopeContext';
 import { formatBRL } from '@/lib/utils/currency';
 import { PeriodFilterSelect } from '@/components/filters/PeriodFilterSelect';
 import { LazyFunnelChart, ChartWrapper } from '@/components/charts';
@@ -55,6 +57,7 @@ const DashboardPage: React.FC = () => {
   const [period, setPeriod] = useState<PeriodFilter>('this_month');
   const [showPipelineAlerts, setShowPipelineAlerts] = useState(false);
   const [selectedBoardId, setSelectedBoardId] = useState<string>('');
+  const [escritorio, setEscritorio] = useState<string | null>(null); // decupação micro→macro
 
   // Inicializar board selecionado
   useEffect(() => {
@@ -115,12 +118,16 @@ const DashboardPage: React.FC = () => {
   // (dado real, honrando o filtro de período). Pipeline/Negócios ficam no espelho
   // do funil (que já é real). winRate/wonRevenue dos deals-espelho saem de cena.
   const intervalo = periodoParaIntervalo(period);
-  const { data: portal } = usePortalMetricas(intervalo);
+  const { data: portal } = usePortalMetricas({ ...intervalo, escritorio });
   const conversaoPortal = portal?.conversao ?? null;
   const receitaPortal = portal?.receita ?? null;
   const ltvPortal = portal?.ltv ?? null;
 
+  const { data: escritoriosData } = usePortalEscritorios();
+  const escritorios = escritoriosData?.escritorios ?? [];
+
   return (
+   <PortalScopeProvider escritorio={escritorio}>
     <div className="flex flex-col h-[calc(100vh-7rem)] space-y-4">
       <div className="flex justify-between items-center shrink-0">
         <div>
@@ -128,10 +135,26 @@ const DashboardPage: React.FC = () => {
             Visão Geral
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            O pulso do seu negócio em tempo real.
+            {escritorio
+              ? <>Carteira de <b className="text-primary-600 dark:text-primary-400">{nomeEscritorio(escritorio)}</b> — visão do escritório.</>
+              : 'O pulso do seu negócio em tempo real.'}
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <select
+            value={escritorio ?? ''}
+            onChange={(e) => setEscritorio(e.target.value || null)}
+            aria-label="Decupar por escritório"
+            className={`px-3 py-2 border rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 ${escritorio
+              ? 'bg-primary-50 dark:bg-primary-500/10 border-primary-300 dark:border-primary-500/40 text-primary-700 dark:text-primary-300'
+              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'}`}
+          >
+            <option value="">Todos os escritórios (gestão)</option>
+            {escritorios.map((e) => (
+              <option key={e.escritorio} value={e.escritorio}>{nomeEscritorio(e.escritorio)} · {e.pares_12m.toLocaleString('pt-BR')} pares</option>
+            ))}
+          </select>
+
           <select
             value={selectedBoardId}
             onChange={(e) => setSelectedBoardId(e.target.value)}
@@ -398,6 +421,7 @@ const DashboardPage: React.FC = () => {
         }}
       />
     </div>
+   </PortalScopeProvider>
   );
 };
 
