@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { TrendingUp } from 'lucide-react';
+import { usePortalMetricas } from '../hooks/usePortalMetricas';
 
 /**
  * Recompra por segmento (≤120d) — a "métrica de ouro" da Macboot, no dashboard.
@@ -20,22 +20,8 @@ const SEG_LABELS: Record<string, string> = {
   TOTAL: 'Total',
 };
 
-interface Row {
-  segmento: string;
-  pct: number;
-  n: number;
-}
-
 export const RecompraSegmentoSection: React.FC = () => {
-  const { data, isLoading, isError } = useQuery<{ recompra_segmento: Row[] }>({
-    queryKey: ['portal-metricas', 'recompra_segmento'],
-    queryFn: async () => {
-      const r = await fetch('/api/portal-metricas');
-      if (!r.ok) throw new Error('falha ao buscar métricas do portal');
-      return r.json();
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data, isLoading, isError } = usePortalMetricas();
 
   const all = data?.recompra_segmento ?? [];
   const rows = all.filter((r) => r.segmento !== 'TOTAL');
