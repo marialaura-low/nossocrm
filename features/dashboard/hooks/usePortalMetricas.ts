@@ -131,18 +131,20 @@ export interface PortalMetricas {
 }
 
 export function usePortalMetricas(params?: { inicio?: string; fim?: string; escritorio?: string | null }) {
-  // escritório do foco: explícito > contexto (micro→macro) > macro. Um cálculo, dois níveis.
+  // foco (escritório) e janela (período): explícito > contexto > default. Um escopo, todos os cards.
   const scope = usePortalScope();
   const escritorio = params?.escritorio ?? scope.escritorio ?? undefined;
+  const inicio = params?.inicio ?? scope.inicio ?? undefined;
+  const fim = params?.fim ?? scope.fim ?? undefined;
 
   const qs = new URLSearchParams();
-  if (params?.inicio) qs.set('inicio', params.inicio);
-  if (params?.fim) qs.set('fim', params.fim);
+  if (inicio) qs.set('inicio', inicio);
+  if (fim) qs.set('fim', fim);
   if (escritorio) qs.set('escritorio', escritorio);
   const suffix = qs.toString();
 
   return useQuery<PortalMetricas>({
-    queryKey: ['portal-metricas', params?.inicio ?? '', params?.fim ?? '', escritorio ?? ''],
+    queryKey: ['portal-metricas', inicio ?? '', fim ?? '', escritorio ?? ''],
     queryFn: async () => {
       const r = await fetch(`/api/portal-metricas${suffix ? `?${suffix}` : ''}`);
       if (!r.ok) throw new Error('falha ao buscar métricas do portal');

@@ -4,6 +4,7 @@ import React from 'react';
 import { Snowflake } from 'lucide-react';
 import { formatBRL } from '@/lib/utils/currency';
 import { usePortalMetricas } from '../hooks/usePortalMetricas';
+import { usePortalScope } from '../context/PortalScopeContext';
 
 /**
  * Esfriamento (churn) — o espelho da reativação: clientes cuja última compra completou
@@ -16,6 +17,7 @@ const nf = new Intl.NumberFormat('pt-BR');
 
 export const ChurnSection: React.FC = () => {
   const { data, isLoading, isError } = usePortalMetricas();
+  const { periodoLabel } = usePortalScope();
   const c = data?.churn ?? null;
 
   return (
@@ -25,7 +27,7 @@ export const ChurnSection: React.FC = () => {
           <Snowflake size={16} className="text-sky-600 dark:text-sky-400" aria-hidden="true" />
           Esfriamento
         </h3>
-        <span className="text-[11px] text-slate-400 uppercase tracking-wide">churn · mês corrente</span>
+        <span className="text-[11px] text-slate-400 uppercase tracking-wide">churn · {periodoLabel ?? 'mês corrente'}</span>
       </div>
       <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4">
         Clientes que completaram 120 dias sem comprar neste período — o espelho da reativação.

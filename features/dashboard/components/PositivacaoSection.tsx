@@ -3,6 +3,7 @@
 import React from 'react';
 import { UserCheck, RotateCcw, Sparkles } from 'lucide-react';
 import { usePortalMetricas, type PilarPositivacao } from '../hooks/usePortalMetricas';
+import { usePortalScope } from '../context/PortalScopeContext';
 
 /**
  * Positivação em 3 pilares — a leitura só-Macboot de quem comprou no mês e DE ONDE
@@ -22,6 +23,7 @@ const ORDEM = ['retencao', 'reativacao', 'novo'];
 
 export const PositivacaoSection: React.FC = () => {
   const { data, isLoading, isError } = usePortalMetricas();
+  const { periodoLabel } = usePortalScope();
   const pos = data?.positivacao ?? null;
 
   const byPilar = new Map((pos?.pilares ?? []).map((p: PilarPositivacao) => [p.pilar, p]));
@@ -31,7 +33,7 @@ export const PositivacaoSection: React.FC = () => {
     <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm">
       <div className="flex items-baseline justify-between mb-1">
         <h3 className="text-sm font-bold text-slate-700 dark:text-white">Positivação</h3>
-        <span className="text-[11px] text-slate-400 uppercase tracking-wide">3 pilares · mês corrente</span>
+        <span className="text-[11px] text-slate-400 uppercase tracking-wide">3 pilares · {periodoLabel ?? 'mês corrente'}</span>
       </div>
       <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4">
         Quem comprou no mês e de onde veio o volume — retenção, reativação e novos.

@@ -4,6 +4,7 @@ import React from 'react';
 import { Wallet, Receipt, Repeat, Boxes } from 'lucide-react';
 import { formatBRL } from '@/lib/utils/currency';
 import { usePortalMetricas } from '../hooks/usePortalMetricas';
+import { usePortalScope } from '../context/PortalScopeContext';
 
 /**
  * Intensidade de compra — ARPU, ticket médio e frequência, ligados pela identidade
@@ -36,13 +37,14 @@ const Metrica: React.FC<{
 
 export const IntensidadeSection: React.FC = () => {
   const { data, isLoading, isError } = usePortalMetricas();
+  const { periodoLabel } = usePortalScope();
   const i = data?.intensidade ?? null;
 
   return (
     <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm">
       <div className="flex items-baseline justify-between mb-1">
         <h3 className="text-sm font-bold text-slate-700 dark:text-white">Intensidade de compra</h3>
-        <span className="text-[11px] text-slate-400 uppercase tracking-wide">mês corrente</span>
+        <span className="text-[11px] text-slate-400 uppercase tracking-wide">{periodoLabel ?? 'mês corrente'}</span>
       </div>
       <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4">
         Quanto cada cliente rende no mês (= ticket × frequência), o tamanho do pedido, quantas vezes compra e a grade média.
@@ -61,7 +63,7 @@ export const IntensidadeSection: React.FC = () => {
               titulo="Receita por cliente"
               hint="ARPU · receita ÷ clientes"
               valor={formatBRL(i.arpu)}
-              sub="por cliente no mês"
+              sub="por cliente no período"
               icon={<Wallet size={15} aria-hidden="true" />}
               accent="text-primary-600 dark:text-primary-400"
             />
@@ -77,7 +79,7 @@ export const IntensidadeSection: React.FC = () => {
               titulo="Frequência"
               hint="pedidos ÷ clientes"
               valor={nf2.format(i.frequencia)}
-              sub="pedidos/cliente no mês"
+              sub="pedidos/cliente no período"
               icon={<Repeat size={15} aria-hidden="true" />}
               accent="text-sky-600 dark:text-sky-400"
             />
@@ -91,7 +93,7 @@ export const IntensidadeSection: React.FC = () => {
             />
           </div>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-4 pt-3 border-t border-slate-100 dark:border-white/5">
-            Base: {i.clientes} clientes · {i.pedidos} pedidos · {formatBRL(i.valor)} emitidos no mês.
+            Base: {i.clientes} clientes · {i.pedidos} pedidos · {formatBRL(i.valor)} emitidos no período.
           </p>
         </>
       )}

@@ -20,7 +20,7 @@ import { PositivacaoSection } from './components/PositivacaoSection';
 import { IntensidadeSection } from './components/IntensidadeSection';
 import { AquisicaoSection } from './components/AquisicaoSection';
 import { ForecastSection } from './components/ForecastSection';
-import { useDashboardMetrics, PeriodFilter, COMPARISON_LABELS } from './hooks/useDashboardMetrics';
+import { useDashboardMetrics, PeriodFilter, COMPARISON_LABELS, PERIOD_LABELS } from './hooks/useDashboardMetrics';
 import { usePortalMetricas, usePortalEscritorios } from './hooks/usePortalMetricas';
 import { periodoParaIntervalo } from './lib/periodo';
 import { nomeEscritorio } from './lib/escritorio';
@@ -127,7 +127,7 @@ const DashboardPage: React.FC = () => {
   const escritorios = escritoriosData?.escritorios ?? [];
 
   return (
-   <PortalScopeProvider escritorio={escritorio}>
+   <PortalScopeProvider escritorio={escritorio} inicio={intervalo.inicio} fim={intervalo.fim} periodoLabel={PERIOD_LABELS[period]}>
     <div className="flex flex-col h-[calc(100vh-7rem)] space-y-4">
       <div className="flex justify-between items-center shrink-0">
         <div>

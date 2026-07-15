@@ -4,6 +4,7 @@ import React from 'react';
 import { ArrowUpRight, Truck } from 'lucide-react';
 import { formatBRL } from '@/lib/utils/currency';
 import { usePortalMetricas, type CanalFechamento } from '../hooks/usePortalMetricas';
+import { usePortalScope } from '../context/PortalScopeContext';
 
 /**
  * Receita — os DOIS cards da doutrina emissão × entrega, com dado real do portal
@@ -37,13 +38,14 @@ const ReceitaCard: React.FC<{
 
 export const ReceitaSection: React.FC = () => {
   const { data, isLoading, isError } = usePortalMetricas();
+  const { periodoLabel } = usePortalScope();
   const receita = data?.receita ?? null;
 
   return (
     <div>
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="text-sm font-bold text-slate-700 dark:text-white">Receita</h3>
-        <span className="text-[11px] text-slate-400 uppercase tracking-wide">emissão × entrega · mês corrente</span>
+        <span className="text-[11px] text-slate-400 uppercase tracking-wide">emissão × entrega · {periodoLabel ?? 'mês corrente'}</span>
       </div>
 
       {isError && <p className="text-xs text-red-500">Não consegui puxar a receita do portal agora.</p>}

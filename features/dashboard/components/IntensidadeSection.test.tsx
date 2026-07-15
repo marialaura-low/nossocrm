@@ -42,7 +42,7 @@ describe('IntensidadeSection', () => {
     expect(screen.getByText(/13\.441,59/)).toBeInTheDocument();
     // frequência explicitamente mensal
     expect(screen.getByText(/2,09/)).toBeInTheDocument();
-    expect(screen.getByText('pedidos/cliente no mês')).toBeInTheDocument();
+    expect(screen.getByText('pedidos/cliente no período')).toBeInTheDocument();
     // grade média = pares ÷ pedidos (17.409/253 ≈ 69 pares/pedido)
     expect(screen.getByText('Grade média')).toBeInTheDocument();
     expect(screen.getByText('69')).toBeInTheDocument();
