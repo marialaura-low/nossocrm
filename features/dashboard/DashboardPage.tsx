@@ -14,6 +14,7 @@ import { PipelineAlertsModal } from './components/PipelineAlertsModal';
 import { AIMetricsSection } from './components/AIMetricsSection';
 import { MessagingMetricsSection } from './components/MessagingMetricsSection';
 import { RecompraSegmentoSection } from './components/RecompraSegmentoSection';
+import { ChurnSection } from './components/ChurnSection';
 import { ReceitaSection } from './components/ReceitaSection';
 import { PositivacaoSection } from './components/PositivacaoSection';
 import { IntensidadeSection } from './components/IntensidadeSection';
@@ -322,8 +323,9 @@ const DashboardPage: React.FC = () => {
         <PositivacaoSection />
         <AquisicaoSection />
       </div>
-      <div className="mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <RecompraSegmentoSection />
+        <ChurnSection />
       </div>
 
       {/* Messaging Metrics Section */}

@@ -220,11 +220,13 @@ export async function GET(request: Request) {
       portalRpc('emissao_mensal_b2b', { p_escritorio: escritorio }),
       portalRpc('conversao_funil', { inicio, fim, p_escritorio: escritorio }),
       portalRpc('ltv_receita', { p_escritorio: escritorio }),
+      portalRpc('churn_clientes', { inicio, fim, p_escritorio: escritorio }),
+      portalRpc('carteira_positivada', { inicio, fim, p_escritorio: escritorio }),
     ]),
     lerMetas(supabase, ano, escritorio),
     lerMetasMensais(supabase, ano, 'pares_b2b', escritorio),
   ]);
-  const [recompraR, receitaR, positivacaoR, intensidadeR, aquisicaoR, emissaoB2BR, conversaoR, ltvR] = portalResults;
+  const [recompraR, receitaR, positivacaoR, intensidadeR, aquisicaoR, emissaoB2BR, conversaoR, ltvR, churnR, carteiraR] = portalResults;
 
   if (
     recompraR.status === 'rejected' && receitaR.status === 'rejected' &&
@@ -243,10 +245,18 @@ export async function GET(request: Request) {
     console.error('[portal-metricas] receita:', receitaR.reason);
   }
 
-  let positivacao: { periodo: { inicio: string; fim: string }; escritorio: string | null; pilares: PilarPositivacao[]; total: ReturnType<typeof somaPilares> } | null = null;
+  // % da carteira positivada (RPC carteira_positivada) — enriquece o card de positivação
+  let carteira: { positivados: number; carteira: number; pct: number | null } | null = null;
+  if (carteiraR.status === 'fulfilled') {
+    carteira = (carteiraR.value as { positivados: number; carteira: number; pct: number | null }[])[0] ?? null;
+  } else {
+    console.error('[portal-metricas] carteira:', carteiraR.reason);
+  }
+
+  let positivacao: { periodo: { inicio: string; fim: string }; escritorio: string | null; pilares: PilarPositivacao[]; total: ReturnType<typeof somaPilares>; carteira: typeof carteira } | null = null;
   if (positivacaoR.status === 'fulfilled') {
     const pilares = positivacaoR.value as PilarPositivacao[];
-    positivacao = { periodo: { inicio, fim }, escritorio, pilares, total: somaPilares(pilares) };
+    positivacao = { periodo: { inicio, fim }, escritorio, pilares, total: somaPilares(pilares), carteira };
   } else {
     console.error('[portal-metricas] positivacao:', positivacaoR.reason);
   }
@@ -285,6 +295,15 @@ export async function GET(request: Request) {
     console.error('[portal-metricas] conversao:', conversaoR.reason);
   }
 
+  // Churn: quem cruzou a linha dos 120d sem comprar DENTRO do período (espelho da reativação)
+  let churn: { periodo: { inicio: string; fim: string }; escritorio: string | null; clientes: number; valor_12m: number } | null = null;
+  if (churnR.status === 'fulfilled') {
+    const row = (churnR.value as { clientes: number; valor_12m: number }[])[0];
+    if (row) churn = { periodo: { inicio, fim }, escritorio, ...row };
+  } else {
+    console.error('[portal-metricas] churn:', churnR.reason);
+  }
+
   // LTV-receita (vida no banco, desde 2023) — receita, não margem (margem trava em custo/par)
   let ltv: { escritorio: string | null; ltv: number; clientes: number; desde: string } | null = null;
   if (ltvR.status === 'fulfilled') {
@@ -303,5 +322,6 @@ export async function GET(request: Request) {
     forecast,
     conversao,
     ltv,
+    churn,
   });
 }

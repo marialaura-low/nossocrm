@@ -33,11 +33,18 @@ export interface PilarPositivacao {
   pares: number;
 }
 
+export interface CarteiraPositivada {
+  positivados: number;
+  carteira: number;
+  pct: number | null;
+}
+
 export interface Positivacao {
   periodo: { inicio: string; fim: string };
   escritorio: string | null;
   pilares: PilarPositivacao[];
   total: { clientes: number; pares: number };
+  carteira: CarteiraPositivada | null;
 }
 
 export interface Intensidade {
@@ -103,6 +110,13 @@ export interface LtvReceita {
   desde: string;
 }
 
+export interface Churn {
+  periodo: { inicio: string; fim: string };
+  escritorio: string | null;
+  clientes: number;
+  valor_12m: number;
+}
+
 export interface PortalMetricas {
   recompra_segmento: RecompraRow[] | null;
   receita: Receita | null;
@@ -112,6 +126,7 @@ export interface PortalMetricas {
   forecast: Forecast | null;
   conversao: Conversao | null;
   ltv: LtvReceita | null;
+  churn: Churn | null;
 }
 
 export function usePortalMetricas(params?: { inicio?: string; fim?: string; escritorio?: string }) {

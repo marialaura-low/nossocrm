@@ -22,6 +22,7 @@ const positivacao = {
     { pilar: 'reativacao', clientes: 55, pares: 4043 },
   ],
   total: { clientes: 114, pares: 17073 },
+  carteira: { positivados: 114, carteira: 752, pct: 15.2 },
 };
 
 describe('PositivacaoSection', () => {
@@ -34,11 +35,23 @@ describe('PositivacaoSection', () => {
     await waitFor(() => expect(screen.getByText('Retenção')).toBeInTheDocument());
     expect(screen.getByText('Reativação')).toBeInTheDocument();
     expect(screen.getByText('Novos')).toBeInTheDocument();
-    // total de positivados = soma dos pilares
-    expect(screen.getByText(/114/)).toBeInTheDocument();
+    // total de positivados = soma dos pilares (o número grande, sozinho no elemento)
+    expect(screen.getByText('114')).toBeInTheDocument();
     // clientes por pilar aparecem
     expect(screen.getByText(/40 clientes/)).toBeInTheDocument();
     expect(screen.getByText(/55 clientes/)).toBeInTheDocument();
+    // régua da carteira: % positivada sobre a carteira ativa 12m
+    expect(screen.getByText(/15,2%|15\.2%/)).toBeInTheDocument();
+    expect(screen.getByText(/da carteira ativa/)).toBeInTheDocument();
+    expect(screen.getByText(/de 752 clientes/)).toBeInTheDocument();
+  });
+
+  it('omite a régua da carteira quando não vem do portal (não fabrica %)', async () => {
+    const semCarteira = { ...positivacao, carteira: null };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ positivacao: semCarteira }) })));
+    renderIt();
+    await waitFor(() => expect(screen.getByText('Retenção')).toBeInTheDocument());
+    expect(screen.queryByText(/da carteira ativa/)).not.toBeInTheDocument();
   });
 
   it('não quebra quando a positivação vem nula', async () => {

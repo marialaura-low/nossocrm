@@ -45,10 +45,17 @@ export const PositivacaoSection: React.FC = () => {
 
       {pos && (
         <>
-          <div className="flex items-baseline gap-2 mb-4">
+          <div className="flex items-baseline gap-2 mb-1">
             <span className="text-3xl font-bold text-slate-800 dark:text-white">{nf.format(pos.total.clientes)}</span>
             <span className="text-xs text-slate-500 dark:text-slate-400">clientes positivados · {nf.format(pos.total.pares)} pares</span>
           </div>
+          {pos.carteira?.pct != null && (
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4">
+              <b className="text-slate-600 dark:text-slate-300">{pos.carteira.pct}%</b> da carteira ativa
+              ({nf.format(pos.carteira.positivados)} de {nf.format(pos.carteira.carteira)} clientes com compra nos últimos 12 meses).
+            </p>
+          )}
+          {pos.carteira?.pct == null && <div className="mb-3" />}
 
           <div className="space-y-3">
             {ORDEM.map((key) => {

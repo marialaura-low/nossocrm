@@ -74,8 +74,12 @@ const conversaoFunil = [{ ganhos: 15, fechados: 263, pct: 5.7 }]
 
 const ltvReceita = [{ ltv: 49433.77, clientes: 1906, desde: '2023-01-01' }]
 
+const churnClientes = [{ clientes: 81, valor_12m: 2350595.6 }]
+
+const carteiraPositivada = [{ positivados: 48, carteira: 752, pct: 6.4 }]
+
 /** roteia o fetch mockado por URL: funil_baseline (GET) x RPCs (POST). */
-function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; positivacao?: unknown; intensidade?: unknown; aquisicao?: unknown; emissao?: unknown; conversao?: unknown; ltv?: unknown; baselineOk?: boolean; fechamentoOk?: boolean; positivacaoOk?: boolean; intensidadeOk?: boolean; aquisicaoOk?: boolean; emissaoOk?: boolean } = {}) {
+function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; positivacao?: unknown; intensidade?: unknown; aquisicao?: unknown; emissao?: unknown; conversao?: unknown; ltv?: unknown; churn?: unknown; carteira?: unknown; baselineOk?: boolean; fechamentoOk?: boolean; positivacaoOk?: boolean; intensidadeOk?: boolean; aquisicaoOk?: boolean; emissaoOk?: boolean } = {}) {
   const fetchMock = vi.fn(async (url: string) => {
     if (String(url).includes('/rpc/fechamento_comercial')) {
       return { ok: over.fechamentoOk ?? true, status: 200, json: async () => over.fechamento ?? fechamento }
@@ -97,6 +101,12 @@ function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; posit
     }
     if (String(url).includes('/rpc/ltv_receita')) {
       return { ok: true, status: 200, json: async () => over.ltv ?? ltvReceita }
+    }
+    if (String(url).includes('/rpc/churn_clientes')) {
+      return { ok: true, status: 200, json: async () => over.churn ?? churnClientes }
+    }
+    if (String(url).includes('/rpc/carteira_positivada')) {
+      return { ok: true, status: 200, json: async () => over.carteira ?? carteiraPositivada }
     }
     return { ok: over.baselineOk ?? true, status: 200, json: async () => over.baseline ?? baseline }
   })
@@ -252,6 +262,27 @@ describe('GET /api/portal-metricas', () => {
     expect(res.status).toBe(200)
     expect(body.conversao).toMatchObject({ ganhos: 15, fechados: 263, pct: 5.7 })
     expect(body.ltv).toMatchObject({ ltv: 49433.77, clientes: 1906, desde: '2023-01-01' })
+  })
+
+  it('expõe churn (quem cruzou 120d no período) com o sell-in 12m em risco', async () => {
+    stubPortalFetch()
+    supabaseClientMock = supaMock()
+    const res = await GET(req())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.churn).toMatchObject({ clientes: 81, valor_12m: 2350595.6 })
+    expect(body.churn.periodo).toEqual({ inicio: expect.any(String), fim: expect.any(String) })
+  })
+
+  it('positivação ganha a régua da carteira (% positivada sobre a carteira ativa 12m)', async () => {
+    stubPortalFetch()
+    supabaseClientMock = supaMock()
+    const res = await GET(req())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.positivacao.carteira).toEqual({ positivados: 48, carteira: 752, pct: 6.4 })
   })
 
   it('forecast traz o esforço restante (o que os meses em jogo precisam rodar vs o plano)', async () => {
