@@ -12,7 +12,22 @@ vi.mock('@/lib/supabase/server', () => ({
 
 import { GET } from '@/app/api/portal-metricas/route'
 
-const authOk = { auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } }, error: null })) } }
+/** query builder mockado do supabase (thenable, encadeia .select/.eq/.is). */
+function metasQuery(rows: unknown[]) {
+  const q: Record<string, unknown> = {}
+  for (const m of ['select', 'eq', 'is']) q[m] = () => q
+  q.then = (resolve: (v: unknown) => unknown) => resolve({ data: rows, error: null })
+  return q
+}
+
+function supaMock(metas: unknown[] = [{ indicador: 'novos', meta_ano: 308 }]) {
+  return {
+    auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } }, error: null })) },
+    from: vi.fn(() => metasQuery(metas)),
+  }
+}
+
+const authOk = supaMock()
 
 const baseline = [
   { segmento: 'ecommerce_marketplace', janela: 'recompra_120d', pct: 79.1, n: 153 },
@@ -166,6 +181,26 @@ describe('GET /api/portal-metricas', () => {
     expect(body.aquisicao.escritorio).toBe('B2B SIM')
     const rpc = fetchMock.mock.calls.find((c) => String(c[0]).includes('/rpc/aquisicao_mensal'))!
     expect(JSON.parse((rpc[1] as RequestInit).body as string)).toMatchObject({ p_escritorio: 'B2B SIM' })
+  })
+
+  it('anexa a meta de novos (da tabela metas do Maré) na aquisição', async () => {
+    stubPortalFetch()
+    supabaseClientMock = supaMock([{ indicador: 'novos', meta_ano: 308 }])
+    const res = await GET(req())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.aquisicao.meta_novos).toBe(308)
+  })
+
+  it('meta_novos vem null quando não há meta cadastrada (sem fabricar número)', async () => {
+    stubPortalFetch()
+    supabaseClientMock = supaMock([]) // nenhuma meta
+    const res = await GET(req())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.aquisicao.meta_novos).toBeNull()
   })
 
   it('resiliência: se a receita falhar, ainda entrega a recompra (não zera o dashboard)', async () => {

@@ -63,6 +63,7 @@ export interface Aquisicao {
   serie: MesAquisicao[];
   ytd: { novos: number; pares: number };
   atual: MesAquisicao | null;
+  meta_novos: number | null;
 }
 
 export interface PortalMetricas {

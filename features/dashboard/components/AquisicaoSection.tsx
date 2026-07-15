@@ -55,6 +55,16 @@ export const AquisicaoSection: React.FC = () => {
               <p className="text-3xl font-bold text-primary-600 dark:text-primary-400 leading-none">{nf.format(aq.ytd.novos)}</p>
               <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">no ano · {nf.format(aq.ytd.pares)} pares</p>
             </div>
+            {aq.meta_novos != null && (
+              <div>
+                <p className="text-3xl font-bold text-slate-400 dark:text-slate-500 leading-none">
+                  {Math.round((aq.ytd.novos / aq.meta_novos) * 100)}%
+                </p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                  da meta {nf.format(aq.meta_novos)} · faltam {nf.format(Math.max(0, aq.meta_novos - aq.ytd.novos))}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex items-end gap-1.5 h-20">
@@ -76,7 +86,11 @@ export const AquisicaoSection: React.FC = () => {
             })}
           </div>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
-            Meta de novos e gap entram quando definida — hoje o card mostra o ritmo real.
+            {aq.meta_novos != null
+              ? `Meta ${nf.format(aq.meta_novos)} novos/ano (projeção 2026, editável). Último mês é parcial.`
+              : aq.escritorio
+                ? 'Meta por escritório ainda não cadastrada — mostrando o ritmo real.'
+                : 'Meta de novos entra quando cadastrada — hoje o card mostra o ritmo real.'}
           </p>
         </>
       )}

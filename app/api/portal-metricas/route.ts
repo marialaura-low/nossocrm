@@ -38,6 +38,22 @@ async function portalRpc(fn: string, args: Record<string, unknown>): Promise<unk
   return res.json();
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/** Lê as metas editáveis do próprio Maré (tabela `metas`) → { indicador: meta_ano }. Macro = escritorio ''. */
+async function lerMetas(supabase: any, ano: number, escritorio: string | null): Promise<Record<string, number>> {
+  try {
+    const { data, error } = await supabase
+      .from('metas')
+      .select('indicador, meta_ano')
+      .eq('ano', ano)
+      .eq('escritorio', escritorio ?? '');
+    if (error || !data) return {};
+    return Object.fromEntries((data as { indicador: string; meta_ano: number }[]).map((r) => [r.indicador, Number(r.meta_ano)]));
+  } catch {
+    return {};
+  }
+}
+
 /** Primeiro dia do mês corrente → primeiro dia do mês seguinte (fechamento usa [inicio, fim)). */
 function mesCorrente(): { inicio: string; fim: string } {
   const now = new Date();
@@ -119,13 +135,18 @@ export async function GET(request: Request) {
   // recompra ≤120d por segmento — funil_baseline (macro; migration 018)
   // receita — RPC fechamento_comercial (emissão × entrega; macro, não aceita escritório ainda)
   // positivação 3 pilares + intensidade (ARPU/ticket/frequência) — RPCs com escritório: micro→macro real
-  const [recompraR, receitaR, positivacaoR, intensidadeR, aquisicaoR] = await Promise.allSettled([
-    portalGet('/funil_baseline?select=segmento,janela,pct,n&order=n.desc'),
-    portalRpc('fechamento_comercial', { inicio, fim }),
-    portalRpc('positivacao_mensal', { inicio, fim, p_escritorio: escritorio }),
-    portalRpc('intensidade_compra_mensal', { inicio, fim, p_escritorio: escritorio }),
-    portalRpc('aquisicao_mensal', { meses: mesesAno, p_escritorio: escritorio }),
+  const ano = new Date().getFullYear();
+  const [portalResults, metas] = await Promise.all([
+    Promise.allSettled([
+      portalGet('/funil_baseline?select=segmento,janela,pct,n&order=n.desc'),
+      portalRpc('fechamento_comercial', { inicio, fim }),
+      portalRpc('positivacao_mensal', { inicio, fim, p_escritorio: escritorio }),
+      portalRpc('intensidade_compra_mensal', { inicio, fim, p_escritorio: escritorio }),
+      portalRpc('aquisicao_mensal', { meses: mesesAno, p_escritorio: escritorio }),
+    ]),
+    lerMetas(supabase, ano, escritorio),
   ]);
+  const [recompraR, receitaR, positivacaoR, intensidadeR, aquisicaoR] = portalResults;
 
   if (
     recompraR.status === 'rejected' && receitaR.status === 'rejected' &&
@@ -160,10 +181,14 @@ export async function GET(request: Request) {
     console.error('[portal-metricas] intensidade:', intensidadeR.reason);
   }
 
-  let aquisicao: { escritorio: string | null; serie: MesAquisicao[]; ytd: ReturnType<typeof somaAquisicao>; atual: MesAquisicao | null } | null = null;
+  let aquisicao: { escritorio: string | null; serie: MesAquisicao[]; ytd: ReturnType<typeof somaAquisicao>; atual: MesAquisicao | null; meta_novos: number | null } | null = null;
   if (aquisicaoR.status === 'fulfilled') {
     const serie = aquisicaoR.value as MesAquisicao[];
-    aquisicao = { escritorio, serie, ytd: somaAquisicao(serie), atual: serie.length ? serie[serie.length - 1] : null };
+    aquisicao = {
+      escritorio, serie, ytd: somaAquisicao(serie),
+      atual: serie.length ? serie[serie.length - 1] : null,
+      meta_novos: metas.novos ?? null, // da tabela editável do Maré; null = não cadastrada (não fabrica)
+    };
   } else {
     console.error('[portal-metricas] aquisicao:', aquisicaoR.reason);
   }
