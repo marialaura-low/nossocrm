@@ -40,10 +40,23 @@ export interface Positivacao {
   total: { clientes: number; pares: number };
 }
 
+export interface Intensidade {
+  periodo: { inicio: string; fim: string };
+  escritorio: string | null;
+  valor: number;
+  pares: number;
+  pedidos: number;
+  clientes: number;
+  arpu: number;
+  ticket_medio: number;
+  frequencia: number;
+}
+
 export interface PortalMetricas {
   recompra_segmento: RecompraRow[] | null;
   receita: Receita | null;
   positivacao: Positivacao | null;
+  intensidade: Intensidade | null;
 }
 
 export function usePortalMetricas(params?: { inicio?: string; fim?: string; escritorio?: string }) {

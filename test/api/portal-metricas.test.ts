@@ -28,19 +28,26 @@ const fechamento = [
 ]
 
 const positivacao = [
-  { pilar: 'retencao', clientes: 40, pares: 12035 },
+  { pilar: 'retencao', clientes: 42, pares: 12133 },
   { pilar: 'novo', clientes: 19, pares: 995 },
-  { pilar: 'reativacao', clientes: 55, pares: 4043 },
+  { pilar: 'reativacao', clientes: 60, pares: 4281 },
+]
+
+const intensidade = [
+  { valor: 3400722.91, pares: 17409, pedidos: 253, clientes: 121, arpu: 28105.15, ticket_medio: 13441.59, frequencia: 2.09 },
 ]
 
 /** roteia o fetch mockado por URL: funil_baseline (GET) x RPCs (POST). */
-function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; positivacao?: unknown; baselineOk?: boolean; fechamentoOk?: boolean; positivacaoOk?: boolean } = {}) {
+function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; positivacao?: unknown; intensidade?: unknown; baselineOk?: boolean; fechamentoOk?: boolean; positivacaoOk?: boolean; intensidadeOk?: boolean } = {}) {
   const fetchMock = vi.fn(async (url: string) => {
     if (String(url).includes('/rpc/fechamento_comercial')) {
       return { ok: over.fechamentoOk ?? true, status: 200, json: async () => over.fechamento ?? fechamento }
     }
     if (String(url).includes('/rpc/positivacao_mensal')) {
       return { ok: over.positivacaoOk ?? true, status: 200, json: async () => over.positivacao ?? positivacao }
+    }
+    if (String(url).includes('/rpc/intensidade_compra_mensal')) {
+      return { ok: over.intensidadeOk ?? true, status: 200, json: async () => over.intensidade ?? intensidade }
     }
     return { ok: over.baselineOk ?? true, status: 200, json: async () => over.baseline ?? baseline }
   })
@@ -107,8 +114,8 @@ describe('GET /api/portal-metricas', () => {
 
     expect(res.status).toBe(200)
     expect(body.positivacao.pilares).toEqual(positivacao)
-    // total = soma dos pilares (positivados do mês)
-    expect(body.positivacao.total).toEqual({ clientes: 114, pares: 17073 })
+    // total = soma dos pilares (positivados do mês) — reconcilia com a receita (121 / 17.409)
+    expect(body.positivacao.total).toEqual({ clientes: 121, pares: 17409 })
     expect(body.positivacao.escritorio).toBeNull()
   })
 
@@ -120,6 +127,21 @@ describe('GET /api/portal-metricas', () => {
     expect(res.status).toBe(200)
     expect(body.positivacao.escritorio).toBe('B2B SIM')
     const rpc = fetchMock.mock.calls.find((c) => String(c[0]).includes('/rpc/positivacao_mensal'))!
+    expect(JSON.parse((rpc[1] as RequestInit).body as string)).toMatchObject({ p_escritorio: 'B2B SIM' })
+  })
+
+  it('retorna intensidade (ARPU/ticket/frequência) da RPC intensidade_compra_mensal — 1 linha achatada', async () => {
+    const fetchMock = stubPortalFetch()
+    const res = await GET(req('?inicio=2026-06-01&fim=2026-07-01&escritorio=B2B%20SIM'))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.intensidade).toMatchObject({
+      arpu: 28105.15, ticket_medio: 13441.59, frequencia: 2.09, clientes: 121, escritorio: 'B2B SIM',
+    })
+    // valor reconcilia com a receita (mesma base) — sanity de que não inventou número
+    expect(body.intensidade.valor).toBe(3400722.91)
+    const rpc = fetchMock.mock.calls.find((c) => String(c[0]).includes('/rpc/intensidade_compra_mensal'))!
     expect(JSON.parse((rpc[1] as RequestInit).body as string)).toMatchObject({ p_escritorio: 'B2B SIM' })
   })
 
