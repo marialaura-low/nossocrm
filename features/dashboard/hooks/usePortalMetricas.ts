@@ -52,11 +52,25 @@ export interface Intensidade {
   frequencia: number;
 }
 
+export interface MesAquisicao {
+  mes: string;
+  novos: number;
+  pares: number;
+}
+
+export interface Aquisicao {
+  escritorio: string | null;
+  serie: MesAquisicao[];
+  ytd: { novos: number; pares: number };
+  atual: MesAquisicao | null;
+}
+
 export interface PortalMetricas {
   recompra_segmento: RecompraRow[] | null;
   receita: Receita | null;
   positivacao: Positivacao | null;
   intensidade: Intensidade | null;
+  aquisicao: Aquisicao | null;
 }
 
 export function usePortalMetricas(params?: { inicio?: string; fim?: string; escritorio?: string }) {

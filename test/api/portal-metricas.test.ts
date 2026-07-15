@@ -37,8 +37,14 @@ const intensidade = [
   { valor: 3400722.91, pares: 17409, pedidos: 253, clientes: 121, arpu: 28105.15, ticket_medio: 13441.59, frequencia: 2.09 },
 ]
 
+const aquisicao = [
+  { mes: '2026-05-01', novos: 21, pares: 1167 },
+  { mes: '2026-06-01', novos: 19, pares: 995 },
+  { mes: '2026-07-01', novos: 7, pares: 290 },
+]
+
 /** roteia o fetch mockado por URL: funil_baseline (GET) x RPCs (POST). */
-function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; positivacao?: unknown; intensidade?: unknown; baselineOk?: boolean; fechamentoOk?: boolean; positivacaoOk?: boolean; intensidadeOk?: boolean } = {}) {
+function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; positivacao?: unknown; intensidade?: unknown; aquisicao?: unknown; baselineOk?: boolean; fechamentoOk?: boolean; positivacaoOk?: boolean; intensidadeOk?: boolean; aquisicaoOk?: boolean } = {}) {
   const fetchMock = vi.fn(async (url: string) => {
     if (String(url).includes('/rpc/fechamento_comercial')) {
       return { ok: over.fechamentoOk ?? true, status: 200, json: async () => over.fechamento ?? fechamento }
@@ -48,6 +54,9 @@ function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; posit
     }
     if (String(url).includes('/rpc/intensidade_compra_mensal')) {
       return { ok: over.intensidadeOk ?? true, status: 200, json: async () => over.intensidade ?? intensidade }
+    }
+    if (String(url).includes('/rpc/aquisicao_mensal')) {
+      return { ok: over.aquisicaoOk ?? true, status: 200, json: async () => over.aquisicao ?? aquisicao }
     }
     return { ok: over.baselineOk ?? true, status: 200, json: async () => over.baseline ?? baseline }
   })
@@ -142,6 +151,20 @@ describe('GET /api/portal-metricas', () => {
     // valor reconcilia com a receita (mesma base) — sanity de que não inventou número
     expect(body.intensidade.valor).toBe(3400722.91)
     const rpc = fetchMock.mock.calls.find((c) => String(c[0]).includes('/rpc/intensidade_compra_mensal'))!
+    expect(JSON.parse((rpc[1] as RequestInit).body as string)).toMatchObject({ p_escritorio: 'B2B SIM' })
+  })
+
+  it('retorna aquisição: série de novos/mês + YTD + mês atual, da RPC aquisicao_mensal', async () => {
+    const fetchMock = stubPortalFetch()
+    const res = await GET(req('?escritorio=B2B%20SIM'))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.aquisicao.serie).toEqual(aquisicao)
+    expect(body.aquisicao.ytd).toEqual({ novos: 47, pares: 2452 }) // soma da série
+    expect(body.aquisicao.atual).toEqual({ mes: '2026-07-01', novos: 7, pares: 290 }) // último mês
+    expect(body.aquisicao.escritorio).toBe('B2B SIM')
+    const rpc = fetchMock.mock.calls.find((c) => String(c[0]).includes('/rpc/aquisicao_mensal'))!
     expect(JSON.parse((rpc[1] as RequestInit).body as string)).toMatchObject({ p_escritorio: 'B2B SIM' })
   })
 

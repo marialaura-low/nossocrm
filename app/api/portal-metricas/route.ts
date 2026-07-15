@@ -90,6 +90,19 @@ interface Intensidade {
   frequencia: number;
 }
 
+interface MesAquisicao {
+  mes: string;
+  novos: number;
+  pares: number;
+}
+
+function somaAquisicao(serie: MesAquisicao[]) {
+  return serie.reduce(
+    (a, m) => ({ novos: a.novos + (m.novos || 0), pares: a.pares + (m.pares || 0) }),
+    { novos: 0, pares: 0 },
+  );
+}
+
 export async function GET(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -100,23 +113,26 @@ export async function GET(request: Request) {
   const inicio = searchParams.get('inicio') || def.inicio;
   const fim = searchParams.get('fim') || def.fim;
   const escritorio = searchParams.get('escritorio'); // micro→macro: presente = 1 escritório
+  const mesesAno = new Date().getMonth() + 1; // meses de jan até o corrente (série = YTD)
 
   // Universo comercial único = v_sell_in_canal + período (doutrina emissão × entrega).
   // recompra ≤120d por segmento — funil_baseline (macro; migration 018)
   // receita — RPC fechamento_comercial (emissão × entrega; macro, não aceita escritório ainda)
   // positivação 3 pilares + intensidade (ARPU/ticket/frequência) — RPCs com escritório: micro→macro real
-  const [recompraR, receitaR, positivacaoR, intensidadeR] = await Promise.allSettled([
+  const [recompraR, receitaR, positivacaoR, intensidadeR, aquisicaoR] = await Promise.allSettled([
     portalGet('/funil_baseline?select=segmento,janela,pct,n&order=n.desc'),
     portalRpc('fechamento_comercial', { inicio, fim }),
     portalRpc('positivacao_mensal', { inicio, fim, p_escritorio: escritorio }),
     portalRpc('intensidade_compra_mensal', { inicio, fim, p_escritorio: escritorio }),
+    portalRpc('aquisicao_mensal', { meses: mesesAno, p_escritorio: escritorio }),
   ]);
 
   if (
     recompraR.status === 'rejected' && receitaR.status === 'rejected' &&
-    positivacaoR.status === 'rejected' && intensidadeR.status === 'rejected'
+    positivacaoR.status === 'rejected' && intensidadeR.status === 'rejected' &&
+    aquisicaoR.status === 'rejected'
   ) {
-    console.error('[portal-metricas] tudo falhou:', recompraR.reason, receitaR.reason, positivacaoR.reason, intensidadeR.reason);
+    console.error('[portal-metricas] tudo falhou:', recompraR.reason, receitaR.reason, positivacaoR.reason, intensidadeR.reason, aquisicaoR.reason);
     return NextResponse.json({ error: 'erro ao buscar métricas do portal' }, { status: 502 });
   }
 
@@ -144,10 +160,19 @@ export async function GET(request: Request) {
     console.error('[portal-metricas] intensidade:', intensidadeR.reason);
   }
 
+  let aquisicao: { escritorio: string | null; serie: MesAquisicao[]; ytd: ReturnType<typeof somaAquisicao>; atual: MesAquisicao | null } | null = null;
+  if (aquisicaoR.status === 'fulfilled') {
+    const serie = aquisicaoR.value as MesAquisicao[];
+    aquisicao = { escritorio, serie, ytd: somaAquisicao(serie), atual: serie.length ? serie[serie.length - 1] : null };
+  } else {
+    console.error('[portal-metricas] aquisicao:', aquisicaoR.reason);
+  }
+
   return NextResponse.json({
     recompra_segmento: recompraR.status === 'fulfilled' ? recompraR.value : null,
     receita,
     positivacao,
     intensidade,
+    aquisicao,
   });
 }
