@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { portalGet, portalRpc } from '@/lib/portal/rest';
 
+// Dado vivo: sem data-cache do Next nos fetches do handler (o GET do supabase-js
+// às metas era cacheado e segurava curva antiga). O caching fica no cliente (react-query 5min).
+export const fetchCache = 'force-no-store';
+
 /**
  * GET /api/portal-metricas — fundação do dashboard-fusão.
  *
