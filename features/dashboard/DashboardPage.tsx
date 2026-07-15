@@ -18,6 +18,7 @@ import { ReceitaSection } from './components/ReceitaSection';
 import { PositivacaoSection } from './components/PositivacaoSection';
 import { IntensidadeSection } from './components/IntensidadeSection';
 import { AquisicaoSection } from './components/AquisicaoSection';
+import { ForecastSection } from './components/ForecastSection';
 import { useDashboardMetrics, PeriodFilter, COMPARISON_LABELS } from './hooks/useDashboardMetrics';
 import { PeriodFilterSelect } from '@/components/filters/PeriodFilterSelect';
 import { LazyFunnelChart, ChartWrapper } from '@/components/charts';
@@ -299,6 +300,9 @@ const DashboardPage: React.FC = () => {
       </div>
       <div className="mb-6">
         <IntensidadeSection />
+      </div>
+      <div className="mb-6">
+        <ForecastSection />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <PositivacaoSection />

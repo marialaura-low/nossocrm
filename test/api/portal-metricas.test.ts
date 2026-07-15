@@ -20,10 +20,12 @@ function metasQuery(rows: unknown[]) {
   return q
 }
 
-function supaMock(metas: unknown[] = [{ indicador: 'novos', meta_ano: 308 }]) {
+const curvaB2B = Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, meta: [13431, 6100, 12400, 17000, 17000, 17000, 19000, 12000, 14000, 18000, 15000, 10000][i] }))
+
+function supaMock(metas: unknown[] = [{ indicador: 'novos', meta_ano: 308 }], mensais: unknown[] = curvaB2B) {
   return {
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } }, error: null })) },
-    from: vi.fn(() => metasQuery(metas)),
+    from: vi.fn((table: string) => metasQuery(table === 'metas_mensais' ? mensais : metas)),
   }
 }
 
@@ -58,8 +60,18 @@ const aquisicao = [
   { mes: '2026-07-01', novos: 7, pares: 290 },
 ]
 
+const emissaoB2B = [
+  { mes: '2026-01-01', pares: 12540, valor: 2392823.34 },
+  { mes: '2026-02-01', pares: 16339, valor: 3232077.87 },
+  { mes: '2026-03-01', pares: 15181, valor: 2879275.29 },
+  { mes: '2026-04-01', pares: 7295, valor: 1397792.45 },
+  { mes: '2026-05-01', pares: 11438, valor: 2161923.16 },
+  { mes: '2026-06-01', pares: 14471, valor: 2872517.60 },
+  { mes: '2026-07-01', pares: 3398, valor: 679481.72 },
+]
+
 /** roteia o fetch mockado por URL: funil_baseline (GET) x RPCs (POST). */
-function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; positivacao?: unknown; intensidade?: unknown; aquisicao?: unknown; baselineOk?: boolean; fechamentoOk?: boolean; positivacaoOk?: boolean; intensidadeOk?: boolean; aquisicaoOk?: boolean } = {}) {
+function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; positivacao?: unknown; intensidade?: unknown; aquisicao?: unknown; emissao?: unknown; baselineOk?: boolean; fechamentoOk?: boolean; positivacaoOk?: boolean; intensidadeOk?: boolean; aquisicaoOk?: boolean; emissaoOk?: boolean } = {}) {
   const fetchMock = vi.fn(async (url: string) => {
     if (String(url).includes('/rpc/fechamento_comercial')) {
       return { ok: over.fechamentoOk ?? true, status: 200, json: async () => over.fechamento ?? fechamento }
@@ -72,6 +84,9 @@ function stubPortalFetch(over: { baseline?: unknown; fechamento?: unknown; posit
     }
     if (String(url).includes('/rpc/aquisicao_mensal')) {
       return { ok: over.aquisicaoOk ?? true, status: 200, json: async () => over.aquisicao ?? aquisicao }
+    }
+    if (String(url).includes('/rpc/emissao_mensal_b2b')) {
+      return { ok: over.emissaoOk ?? true, status: 200, json: async () => over.emissao ?? emissaoB2B }
     }
     return { ok: over.baselineOk ?? true, status: 200, json: async () => over.baseline ?? baseline }
   })
@@ -201,6 +216,31 @@ describe('GET /api/portal-metricas', () => {
 
     expect(res.status).toBe(200)
     expect(body.aquisicao.meta_novos).toBeNull()
+  })
+
+  it('monta o forecast B2B: curva de meta (12m) + realizado + projeção do ano', async () => {
+    stubPortalFetch()
+    supabaseClientMock = supaMock() // curva default
+    const res = await GET(req())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.forecast.meta_ano).toBe(170931) // soma da curva
+    expect(body.forecast.serie).toHaveLength(12)
+    // janeiro está sempre fechado → realizado real (independente do mês de hoje)
+    expect(body.forecast.serie[0]).toEqual({ mes: 1, meta: 13431, realizado: 12540 })
+    expect(typeof body.forecast.projecao_ano).toBe('number')
+    expect(body.forecast.atingimento_fechado).toBeGreaterThan(0)
+  })
+
+  it('forecast vem null quando não há curva de meta cadastrada', async () => {
+    stubPortalFetch()
+    supabaseClientMock = supaMock([{ indicador: 'novos', meta_ano: 308 }], []) // sem curva mensal
+    const res = await GET(req())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.forecast).toBeNull()
   })
 
   it('resiliência: se a receita falhar, ainda entrega a recompra (não zera o dashboard)', async () => {

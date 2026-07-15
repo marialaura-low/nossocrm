@@ -54,6 +54,58 @@ async function lerMetas(supabase: any, ano: number, escritorio: string | null): 
   }
 }
 
+/** Curva mensal de meta (tabela `metas_mensais` do Maré) → { mes(1-12): meta }. */
+async function lerMetasMensais(supabase: any, ano: number, indicador: string, escritorio: string | null): Promise<Record<number, number>> {
+  try {
+    const { data, error } = await supabase
+      .from('metas_mensais')
+      .select('mes, meta')
+      .eq('ano', ano)
+      .eq('indicador', indicador)
+      .eq('escritorio', escritorio ?? '');
+    if (error || !data) return {};
+    return Object.fromEntries((data as { mes: number; meta: number }[]).map((r) => [Number(r.mes), Number(r.meta)]));
+  } catch {
+    return {};
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+interface MesRealizado { mes: string; pares: number; valor: number }
+
+/**
+ * Forecast B2B: pacing vs plano. O ritmo sai dos meses FECHADOS (exclui o corrente,
+ * que é parcial) — atingimento = realizado/meta dos meses fechados — e projeta o ano
+ * por RAZÃO (respeita a sazonalidade da curva, não extrapola linear). null se não há curva.
+ */
+function montaForecast(escritorio: string | null, curva: Record<number, number>, realizado: MesRealizado[], mesAtual: number) {
+  if (Object.keys(curva).length === 0) return null;
+  const real = new Map(realizado.map((r) => [Number(r.mes.slice(5, 7)), r.pares]));
+  const serie: { mes: number; meta: number; realizado: number | null }[] = [];
+  let realFech = 0;
+  let metaFech = 0;
+  for (let m = 1; m <= 12; m++) {
+    const meta = curva[m] ?? 0;
+    const realizadoMes = m <= mesAtual ? (real.get(m) ?? 0) : null;
+    serie.push({ mes: m, meta, realizado: realizadoMes });
+    if (m < mesAtual) { realFech += real.get(m) ?? 0; metaFech += meta; }
+  }
+  const metaAno = Object.values(curva).reduce((a, b) => a + b, 0);
+  const atingimento = metaFech > 0 ? realFech / metaFech : null;
+  const projecaoAno = atingimento != null ? Math.round(metaAno * atingimento) : null;
+  return {
+    escritorio,
+    meta_ano: metaAno,
+    meses_fechados: mesAtual - 1,
+    realizado_fechado: realFech,
+    meta_fechado: metaFech,
+    atingimento_fechado: atingimento != null ? Math.round(atingimento * 1000) / 1000 : null,
+    projecao_ano: projecaoAno,
+    gap_ano: projecaoAno != null ? projecaoAno - metaAno : null,
+    serie,
+  };
+}
+
 /** Primeiro dia do mês corrente → primeiro dia do mês seguinte (fechamento usa [inicio, fim)). */
 function mesCorrente(): { inicio: string; fim: string } {
   const now = new Date();
@@ -136,17 +188,20 @@ export async function GET(request: Request) {
   // receita — RPC fechamento_comercial (emissão × entrega; macro, não aceita escritório ainda)
   // positivação 3 pilares + intensidade (ARPU/ticket/frequência) — RPCs com escritório: micro→macro real
   const ano = new Date().getFullYear();
-  const [portalResults, metas] = await Promise.all([
+  const mesAtual = new Date().getMonth() + 1; // 1-12
+  const [portalResults, metas, curvaB2B] = await Promise.all([
     Promise.allSettled([
       portalGet('/funil_baseline?select=segmento,janela,pct,n&order=n.desc'),
       portalRpc('fechamento_comercial', { inicio, fim }),
       portalRpc('positivacao_mensal', { inicio, fim, p_escritorio: escritorio }),
       portalRpc('intensidade_compra_mensal', { inicio, fim, p_escritorio: escritorio }),
       portalRpc('aquisicao_mensal', { meses: mesesAno, p_escritorio: escritorio }),
+      portalRpc('emissao_mensal_b2b', { p_escritorio: escritorio }),
     ]),
     lerMetas(supabase, ano, escritorio),
+    lerMetasMensais(supabase, ano, 'pares_b2b', escritorio),
   ]);
-  const [recompraR, receitaR, positivacaoR, intensidadeR, aquisicaoR] = portalResults;
+  const [recompraR, receitaR, positivacaoR, intensidadeR, aquisicaoR, emissaoB2BR] = portalResults;
 
   if (
     recompraR.status === 'rejected' && receitaR.status === 'rejected' &&
@@ -193,11 +248,16 @@ export async function GET(request: Request) {
     console.error('[portal-metricas] aquisicao:', aquisicaoR.reason);
   }
 
+  const realizadoB2B = emissaoB2BR.status === 'fulfilled' ? (emissaoB2BR.value as MesRealizado[]) : [];
+  if (emissaoB2BR.status === 'rejected') console.error('[portal-metricas] emissao_b2b:', emissaoB2BR.reason);
+  const forecast = montaForecast(escritorio, curvaB2B, realizadoB2B, mesAtual);
+
   return NextResponse.json({
     recompra_segmento: recompraR.status === 'fulfilled' ? recompraR.value : null,
     receita,
     positivacao,
     intensidade,
     aquisicao,
+    forecast,
   });
 }

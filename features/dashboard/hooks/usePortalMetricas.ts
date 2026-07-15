@@ -66,12 +66,31 @@ export interface Aquisicao {
   meta_novos: number | null;
 }
 
+export interface ForecastMes {
+  mes: number;
+  meta: number;
+  realizado: number | null;
+}
+
+export interface Forecast {
+  escritorio: string | null;
+  meta_ano: number;
+  meses_fechados: number;
+  realizado_fechado: number;
+  meta_fechado: number;
+  atingimento_fechado: number | null;
+  projecao_ano: number | null;
+  gap_ano: number | null;
+  serie: ForecastMes[];
+}
+
 export interface PortalMetricas {
   recompra_segmento: RecompraRow[] | null;
   receita: Receita | null;
   positivacao: Positivacao | null;
   intensidade: Intensidade | null;
   aquisicao: Aquisicao | null;
+  forecast: Forecast | null;
 }
 
 export function usePortalMetricas(params?: { inicio?: string; fim?: string; escritorio?: string }) {
