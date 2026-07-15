@@ -83,6 +83,7 @@ export const ForecastSection: React.FC = () => {
           {f.super_meta != null && f.esforco_super != null && (
             <p className="text-[11px] -mt-2 mb-4 text-slate-400 dark:text-slate-500">
               Super meta {nf.format(f.super_meta)}: exige {Math.round(f.esforco_super * 100)}% do plano restante.
+              {f.super_meta_obs && <span className="text-amber-600 dark:text-amber-400"> · {f.super_meta_obs}</span>}
             </p>
           )}
 

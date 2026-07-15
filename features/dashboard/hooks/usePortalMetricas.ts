@@ -93,6 +93,7 @@ export interface Forecast {
   esforco_restante: number | null;
   super_meta: number | null;
   esforco_super: number | null;
+  super_meta_obs: string | null;
   serie: ForecastMes[];
 }
 

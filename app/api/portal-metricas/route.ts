@@ -5,6 +5,7 @@ import { portalGet, portalRpc } from '@/lib/portal/rest';
 // Dado vivo: sem data-cache do Next nos fetches do handler (o GET do supabase-js
 // às metas era cacheado e segurava curva antiga). O caching fica no cliente (react-query 5min).
 export const fetchCache = 'force-no-store';
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/portal-metricas — fundação do dashboard-fusão.
@@ -24,16 +25,19 @@ export const fetchCache = 'force-no-store';
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/** Lê as metas editáveis do próprio Maré (tabela `metas`) → { indicador: meta_ano }. Macro = escritorio ''. */
-async function lerMetas(supabase: any, ano: number, escritorio: string | null): Promise<Record<string, number>> {
+/** Lê as metas editáveis do próprio Maré (tabela `metas`) → { indicador: { meta, obs } }. Macro = escritorio ''. */
+async function lerMetas(supabase: any, ano: number, escritorio: string | null): Promise<Record<string, { meta: number; obs: string | null }>> {
   try {
     const { data, error } = await supabase
       .from('metas')
-      .select('indicador, meta_ano')
+      .select('indicador, meta_ano, obs')
       .eq('ano', ano)
       .eq('escritorio', escritorio ?? '');
     if (error || !data) return {};
-    return Object.fromEntries((data as { indicador: string; meta_ano: number }[]).map((r) => [r.indicador, Number(r.meta_ano)]));
+    return Object.fromEntries(
+      (data as { indicador: string; meta_ano: number; obs?: string | null }[])
+        .map((r) => [r.indicador, { meta: Number(r.meta_ano), obs: r.obs ?? null }]),
+    );
   } catch {
     return {};
   }
@@ -265,7 +269,7 @@ export async function GET(request: Request) {
     aquisicao = {
       escritorio, serie, ytd: somaAquisicao(serie),
       atual: serie.length ? serie[serie.length - 1] : null,
-      meta_novos: metas.novos ?? null, // da tabela editável do Maré; null = não cadastrada (não fabrica)
+      meta_novos: metas.novos?.meta ?? null, // da tabela editável do Maré; null = não cadastrada (não fabrica)
     };
   } else {
     console.error('[portal-metricas] aquisicao:', aquisicaoR.reason);
@@ -273,8 +277,10 @@ export async function GET(request: Request) {
 
   const realizadoB2B = emissaoB2BR.status === 'fulfilled' ? (emissaoB2BR.value as MesRealizado[]) : [];
   if (emissaoB2BR.status === 'rejected') console.error('[portal-metricas] emissao_b2b:', emissaoB2BR.reason);
-  // super meta (opcional, editável): alvo esticado acima do compromisso — só aparece se cadastrada
-  const forecast = montaForecast(escritorio, curvaB2B, realizadoB2B, mesAtual, metas.super_pares_b2b ?? null);
+  // super meta (opcional, editável): alvo esticado acima do compromisso — só aparece se cadastrada.
+  // obs (ex.: "em validação") vive no banco: validar/limpar não exige deploy.
+  const forecastBase = montaForecast(escritorio, curvaB2B, realizadoB2B, mesAtual, metas.super_pares_b2b?.meta ?? null);
+  const forecast = forecastBase ? { ...forecastBase, super_meta_obs: metas.super_pares_b2b?.obs ?? null } : null;
 
   // conversão do funil (RPC retorna 1 linha) — caveat: 'encerrado' pré-trigger tem ruído de ciclo de vida
   let conversao: { periodo: { inicio: string; fim: string }; escritorio: string | null; ganhos: number; fechados: number; pct: number | null } | null = null;

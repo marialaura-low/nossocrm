@@ -65,12 +65,21 @@ describe('ForecastSection', () => {
   });
 
   it('mostra a super meta quando cadastrada (alvo esticado, com esforço próprio)', async () => {
-    const comSuper = { ...forecast, super_meta: 180000, esforco_super: 1.167 };
+    const comSuper = { ...forecast, super_meta: 180000, esforco_super: 1.167, super_meta_obs: null };
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ forecast: comSuper }) })));
     renderIt();
 
     await waitFor(() => expect(screen.getByText(/Super meta 180\.000/)).toBeInTheDocument());
     expect(screen.getByText(/117% do plano restante/)).toBeInTheDocument();
+  });
+
+  it('super meta com obs do banco exibe o rótulo (ex.: em validação)', async () => {
+    const comObs = { ...forecast, super_meta: 162264, esforco_super: 1.133, super_meta_obs: 'em validação — recompensa em desenho (Low + financeiro)' };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ forecast: comObs }) })));
+    renderIt();
+
+    await waitFor(() => expect(screen.getByText(/Super meta 162\.264/)).toBeInTheDocument());
+    expect(screen.getByText(/em validação — recompensa em desenho/)).toBeInTheDocument();
   });
 
   it('não quebra quando o forecast vem nulo', async () => {

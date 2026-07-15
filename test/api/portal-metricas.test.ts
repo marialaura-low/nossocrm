@@ -325,7 +325,7 @@ describe('GET /api/portal-metricas', () => {
     stubPortalFetch()
     supabaseClientMock = supaMock([
       { indicador: 'novos', meta_ano: 308 },
-      { indicador: 'super_pares_b2b', meta_ano: 180000 },
+      { indicador: 'super_pares_b2b', meta_ano: 180000, obs: 'em validação — recompensa em desenho' },
     ])
     const res = await GET(req())
     const body = await res.json()
@@ -333,6 +333,16 @@ describe('GET /api/portal-metricas', () => {
     expect(body.forecast.super_meta).toBe(180000)
     const esperado = (180000 - body.forecast.realizado_fechado) / body.forecast.meta_restante
     expect(body.forecast.esforco_super).toBeCloseTo(esperado, 2)
+    // status vive no banco (validar = limpar obs, sem deploy)
+    expect(body.forecast.super_meta_obs).toBe('em validação — recompensa em desenho')
+  })
+
+  it('super meta sem obs → super_meta_obs null (validada, sem rótulo)', async () => {
+    stubPortalFetch()
+    supabaseClientMock = supaMock([{ indicador: 'super_pares_b2b', meta_ano: 180000 }])
+    const res = await GET(req())
+    const body = await res.json()
+    expect(body.forecast.super_meta_obs).toBeNull()
   })
 
   it('forecast vem null quando não há curva de meta cadastrada', async () => {
