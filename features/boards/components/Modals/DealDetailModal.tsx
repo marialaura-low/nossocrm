@@ -56,6 +56,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { StageProgressBar } from '../StageProgressBar';
 import { PortalActionPanel } from './PortalActionPanel';
+import { FichaPortalSection } from './FichaPortalSection';
 import { ActivityRow } from '@/features/activities/components/ActivityRow';
 import { formatPriorityPtBr } from '@/lib/utils/priority';
 import { BriefingDrawer } from '@/features/deals/components/BriefingDrawer';
@@ -689,6 +690,14 @@ export const DealDetailModal: React.FC<DealDetailModalProps> = ({ dealId, isOpen
                   </h3>
                   <p className="text-slate-900 dark:text-white font-medium">{deal.companyName}</p>
                 </div>
+                {/* Ficha rica da união (item A): miolo do portal no deal-espelho — matriz = title,
+                    escritório vem do sync. Read-only (spec §4.1). */}
+                {isMotorBoard && deal.title && (deal.customFields as Record<string, unknown> | undefined)?.escritorio ? (
+                  <FichaPortalSection
+                    matriz={deal.title}
+                    escritorio={String((deal.customFields as Record<string, unknown>).escritorio)}
+                  />
+                ) : null}
                 <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-2">
                     <User size={14} /> Contato Principal
