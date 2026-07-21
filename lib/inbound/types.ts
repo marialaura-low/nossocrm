@@ -18,6 +18,16 @@ export interface Conflito {
   ultimoPedido: string | null; // data ISO do último pedido, se houver
 }
 
+// Sinal de território por CIDADE/UF (mapa derivado no portal: territorio_cidade).
+// Complementa o Conflito (que é por CNPJ): mesmo lead novo pode cair em praça de rep.
+export interface Territorio {
+  mapeado: boolean;             // achou a cidade no mapa (false = praça sem cobertura conhecida)
+  casa: boolean;                // cidade da casa (força-tarefa Tiago/Simone OU canal casa dominante)
+  responsavelCasa: string | null; // Tiago/Simone, se for cidade de força-tarefa
+  repDominante: string | null;  // rep EXTERNO dono da praça (por pares recentes) — munição, não bloqueia
+  disputado: boolean;           // >=2 reps externos relevantes na mesma cidade
+}
+
 // Payload que o GPT Maker manda ao qualificar um lojista.
 export interface LeadInbound {
   nomeLoja: string;

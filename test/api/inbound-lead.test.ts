@@ -36,6 +36,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 vi.mock('@/lib/inbound/cnpj', () => ({ enrichCnpj: async () => ({ fitSortimento: true, cnpjValido: true, razaoSocial: 'X', capitalSocial: 1, nomeFantasia: null, cnaePrincipal: null, cnaeDescricao: null, dataInicioAtividade: null, nFiliais: null }) }));
 vi.mock('@/lib/inbound/conflito', () => ({ checkConflito: async () => ({ jaCliente: true, escritorio: 'REP GO', ultimoPedido: '2026-05-10' }) }));
+vi.mock('@/lib/inbound/territorio', () => ({ checkTerritorio: async () => ({ mapeado: true, casa: true, responsavelCasa: 'Tiago', repDominante: 'GREEN SHOES', disputado: true }) }));
 
 import { POST } from '@/app/api/inbound/lead/route';
 
@@ -78,6 +79,18 @@ describe('POST /api/inbound/lead', () => {
     expect(row.custom_fields.porte.fitSortimento).toBe(true);
     expect(row.custom_fields.ad_referral).toBe('ad-42');
     expect(row.tags).toContain('conflito');
+  });
+
+  it('marca tags de território (rep externo + disputa + casa) e guarda territorio em custom_fields', async () => {
+    const r = await POST(req(LEAD, 's3cr3t'));
+    expect(r.status).toBe(200);
+    const row = insertMock.mock.calls[0][0];
+    expect(row.tags).toContain('territorio-rep');
+    expect(row.tags).toContain('territorio-disputado');
+    expect(row.tags).toContain('territorio-casa');
+    expect(row.tags).not.toContain('territorio-novo');
+    expect(row.custom_fields.territorio.repDominante).toBe('GREEN SHOES');
+    expect(row.custom_fields.territorio.responsavelCasa).toBe('Tiago');
   });
 
   // --- Dedup ---
