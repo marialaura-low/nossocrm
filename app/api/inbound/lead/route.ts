@@ -54,7 +54,7 @@ export async function POST(req: Request) {
   // Território (por cidade) — sinaliza, não bloqueia. Rep segue segurado nesta fase.
   if (territorio.repDominante) tags.push('territorio-rep');
   if (territorio.disputado) tags.push('territorio-disputado');
-  if (territorio.casa) tags.push('territorio-casa');
+  if (territorio.coberturaCasa) tags.push('territorio-cobertura-casa');
   if (!territorio.mapeado) tags.push('territorio-novo');
 
   const custom_fields = {

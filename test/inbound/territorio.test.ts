@@ -11,15 +11,15 @@ beforeEach(() => { portalGetMock.mockReset(); });
 describe('checkTerritorio', () => {
   it('normaliza cidade (acento+caixa) e uf, e mapeia a linha do portal', async () => {
     portalGetMock.mockResolvedValue([{
-      cidade: 'GOIANIA', uf: 'GO', casa: true, responsavel_casa: 'Tiago',
-      rep_dominante: 'GREEN SHOES REPRESENTACAO COMERCIAL LTDA', disputado: false, fonte: 'ambos',
+      rep_dominante: 'REP GO REPRESENTACAO COMERCIAL LTDA', disputado: false,
+      cobertura_casa: true, responsavel_cobertura: 'Tiago',
     }]);
     const r = await checkTerritorio('Goiânia', 'go');
     expect(r.mapeado).toBe(true);
-    expect(r.casa).toBe(true);
-    expect(r.responsavelCasa).toBe('Tiago');
-    expect(r.repDominante).toBe('GREEN SHOES REPRESENTACAO COMERCIAL LTDA');
+    expect(r.repDominante).toBe('REP GO REPRESENTACAO COMERCIAL LTDA');
     expect(r.disputado).toBe(false);
+    expect(r.coberturaCasa).toBe(true);
+    expect(r.responsavelCobertura).toBe('Tiago');
     // consultou com cidade normalizada (GOIANIA) e uf maiúsculo
     const url = portalGetMock.mock.calls[0][0] as string;
     expect(url).toContain('/territorio_cidade?');
@@ -38,7 +38,7 @@ describe('checkTerritorio', () => {
     portalGetMock.mockResolvedValue([]);
     const r = await checkTerritorio('Cidade Inexistente', 'TO');
     expect(r.mapeado).toBe(false);
-    expect(r.casa).toBe(false);
+    expect(r.coberturaCasa).toBe(false);
     expect(r.repDominante).toBeNull();
     expect(r.disputado).toBe(false);
   });
