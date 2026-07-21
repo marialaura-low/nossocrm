@@ -26,9 +26,12 @@ export async function POST(req: Request) {
 
   let body: Partial<LeadInbound>;
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'json inválido' }, { status: 400 }); }
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'corpo inválido' }, { status: 400 });
+  }
 
-  const cnpj = (body.cnpj || '').replace(/\D/g, '');
-  if (cnpj.length !== 14 || !body.nomeLoja) {
+  const cnpj = (typeof body.cnpj === 'string' ? body.cnpj : '').replace(/\D/g, '');
+  if (cnpj.length !== 14 || typeof body.nomeLoja !== 'string' || !body.nomeLoja) {
     return NextResponse.json({ error: 'cnpj e nomeLoja obrigatórios' }, { status: 400 });
   }
 
@@ -38,17 +41,19 @@ export async function POST(req: Request) {
   const { data: board } = await supabase.from('boards').select('id')
     .eq('key', 'inbound-caca-pesca').eq('organization_id', ORG).single();
   if (!board) return NextResponse.json({ error: 'board não encontrado' }, { status: 500 });
-  const { data: stage } = await supabase.from('board_stages').select('id')
+  const { data: stage, error: stageErr } = await supabase.from('board_stages').select('id')
     .eq('board_id', board.id).eq('name', 'Pré-qualificado').single();
+  if (stageErr || !stage) return NextResponse.json({ error: 'estágio Pré-qualificado não encontrado' }, { status: 500 });
 
   const tags: string[] = ['inbound', 'caca-pesca'];
   if (conflito.jaCliente) tags.push('conflito');
-  if (!porte.fitSortimento) tags.push('sem-fit');
+  if (!porte.cnpjValido) tags.push('cnpj-nao-verificado');
+  else if (!porte.fitSortimento) tags.push('sem-fit');
 
   const { data: deal, error } = await supabase.from('deals').insert({
     organization_id: ORG, owner_id: OWNER,
     title: body.nomeLoja, value: 0, status: 'open', priority: 'medium',
-    board_id: board.id, stage_id: stage?.id ?? null,
+    board_id: board.id, stage_id: stage.id,
     tags,
     custom_fields: {
       origem: 'inbound-caca-pesca', cnpj,

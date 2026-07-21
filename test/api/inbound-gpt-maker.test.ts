@@ -36,6 +36,10 @@ describe('POST /api/inbound/gpt-maker', () => {
     const r = await POST(req({ ...LEAD, cnpj: '' }, 's3cr3t'));
     expect(r.status).toBe(400);
   });
+  it('400 (não 500) quando cnpj vem como número', async () => {
+    const r = await POST(req({ ...LEAD, cnpj: 12345678000199 }, 's3cr3t'));
+    expect(r.status).toBe(400);
+  });
   it('cria deal em Pré-qualificado com porte + flag de conflito', async () => {
     const r = await POST(req(LEAD, 's3cr3t'));
     expect(r.status).toBe(200);
