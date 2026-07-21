@@ -24,7 +24,6 @@ export const dynamic = 'force-dynamic';
  *                                      segue macro (baseline pré-computado).
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /** Lê as metas editáveis do próprio Maré (tabela `metas`) → { indicador: { meta, obs } }. Macro = escritorio ''. */
 async function lerMetas(supabase: any, ano: number, escritorio: string | null): Promise<Record<string, { meta: number; obs: string | null }>> {
   try {
@@ -58,7 +57,6 @@ async function lerMetasMensais(supabase: any, ano: number, indicador: string, es
     return {};
   }
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 interface MesRealizado { mes: string; pares: number; valor: number }
 

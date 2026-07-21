@@ -7,11 +7,13 @@ import { PortalScopeProvider } from '../context/PortalScopeContext';
 
 function wrapper(escritorio: string | null, periodo?: { inicio: string; fim: string }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return ({ children }: { children: React.ReactNode }) => (
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={qc}>
       <PortalScopeProvider escritorio={escritorio} inicio={periodo?.inicio} fim={periodo?.fim}>{children}</PortalScopeProvider>
     </QueryClientProvider>
   );
+  Wrapper.displayName = 'PortalMetricasTestWrapper';
+  return Wrapper;
 }
 
 describe('usePortalMetricas — decupação por contexto', () => {

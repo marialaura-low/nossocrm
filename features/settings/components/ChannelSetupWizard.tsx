@@ -149,9 +149,9 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     setupUrl: 'https://doc.evolution-api.com/',
     setupInstructions: [
       '1. Instale ou acesse seu servidor Evolution API',
-      '2. Crie uma instância no painel ou via API',
-      '3. Copie a URL do servidor e a API Key',
-      '4. Após salvar, configure o webhook apontando para a URL exibida',
+      '2. Copie a URL do servidor e a API Key (AUTHENTICATION_API_KEY)',
+      '3. Escolha um nome para a instância (será criada automaticamente se não existir)',
+      '4. Após salvar, clique em "Conectar" no canal para escanear o QR code pelo CRM',
     ],
   },
   'whatsapp:meta-cloud': {
@@ -775,8 +775,9 @@ function TestStep({
       {provider === 'evolution' && (
         <div className="p-4 rounded-xl bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/20">
           <p className="text-xs text-yellow-700 dark:text-yellow-300">
-            <strong>Nota:</strong> Certifique-se de que a instância já está criada e
-            conectada no servidor Evolution API antes de salvar.
+            <strong>Nota:</strong> Após salvar, clique em <strong>Conectar</strong> no
+            card do canal para escanear o QR code com o WhatsApp do número comercial.
+            A instância é criada automaticamente no servidor se ainda não existir.
           </p>
         </div>
       )}
@@ -863,11 +864,10 @@ const WEBHOOK_INSTRUCTIONS: Record<string, { label: string; steps: string[]; doc
   'evolution': {
     label: 'Evolution API',
     steps: [
-      'Acesse o painel da sua instância Evolution API',
-      'Vá em Instâncias → sua instância → Webhooks',
-      'Cole a URL abaixo no campo "Webhook URL"',
-      'Ative os eventos: MESSAGES_UPSERT, MESSAGES_UPDATE, CONNECTION_UPDATE',
-      'Salve as configurações',
+      'O webhook é configurado automaticamente quando você conecta o canal pelo QR code',
+      'Vá no card do canal e clique em "Conectar" para escanear o QR code',
+      'Se precisar configurar manualmente: painel da Evolution → sua instância → Webhooks',
+      'Cole a URL abaixo e ative os eventos MESSAGES_UPSERT, MESSAGES_UPDATE e CONNECTION_UPDATE',
     ],
     docsUrl: 'https://doc.evolution-api.com/v2/pt/webhooks/webhook',
   },

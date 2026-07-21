@@ -201,6 +201,8 @@ export interface ConnectionStatusResult {
 export interface QrCodeResult {
   qrCode: string; // Base64 encoded image or data URL
   expiresAt?: string;
+  /** Código de pareamento alternativo ("conectar com número de telefone") */
+  pairingCode?: string;
 }
 
 // =============================================================================
