@@ -49,6 +49,7 @@ import {
   CHANNEL_TYPE_INFO,
 } from '@/lib/messaging/types';
 import { ChannelSetupWizard } from './ChannelSetupWizard';
+import { ChannelConnectModal } from './ChannelConnectModal';
 import {
   useLeadRoutingRules,
   useBoardsWithStages,
@@ -70,6 +71,12 @@ const CHANNEL_ICONS: Record<ChannelType, React.FC<{ className?: string }>> = {
   telegram: Send,
   voice: Phone,
 };
+
+/**
+ * Providers que autenticam via QR code — o botão "Conectar" abre o modal de
+ * QR em vez de apenas alternar o status no banco.
+ */
+const QR_CODE_PROVIDERS = ['evolution', 'z-api'];
 
 const STATUS_ICONS: Record<ChannelStatus, React.FC<{ className?: string }>> = {
   pending: Clock,
@@ -109,6 +116,7 @@ function getSupabaseProjectRef(): string {
 
 const WEBHOOK_FUNCTION_MAP: Record<string, string> = {
   'z-api': 'messaging-webhook-zapi',
+  'evolution': 'messaging-webhook-evolution',
   'meta-cloud': 'messaging-webhook-meta',
   'meta': 'messaging-webhook-meta',
   'resend': 'messaging-webhook-resend',
@@ -142,6 +150,18 @@ const WEBHOOK_CONFIGS: Record<string, {
     toggles: [
       'Ative "Notificar as enviadas por mim também" — senão mensagens enviadas pelo celular não aparecem no CRM',
       'Cole a mesma URL em todos os campos (exceto Presença do chat). O sistema identifica o tipo de evento automaticamente.',
+    ],
+  },
+  'evolution': {
+    title: 'Webhook da Evolution API',
+    where: 'Configurado automaticamente ao conectar pelo QR code. Se precisar configurar manualmente: painel da Evolution → sua instância → Webhooks',
+    docsUrl: 'https://doc.evolution-api.com/v2/pt/configuration/webhooks',
+    fields: [
+      { label: 'Webhook URL', description: 'Cole a URL abaixo (já configurada automaticamente na conexão via QR)', required: true },
+    ],
+    toggles: [
+      'Ative os eventos: MESSAGES_UPSERT, MESSAGES_UPDATE e CONNECTION_UPDATE',
+      'Em "Headers", adicione um header "apikey" com o valor da API Key do canal (necessário para autenticar no CRM)',
     ],
   },
   'meta-cloud': {
@@ -708,6 +728,7 @@ export function ChannelsSection() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [channelToDelete, setChannelToDelete] = useState<MessagingChannel | null>(null);
   const [channelToEdit, setChannelToEdit] = useState<MessagingChannel | null>(null);
+  const [channelToConnect, setChannelToConnect] = useState<MessagingChannel | null>(null);
 
   const canUse = profile?.role === 'admin';
 
@@ -755,6 +776,13 @@ export function ChannelsSection() {
   // Handlers
   const handleToggleChannel = async (channel: MessagingChannel) => {
     const isConnected = channel.status === 'connected';
+
+    // Providers com QR code conectam via modal (escaneando com o celular)
+    if (!isConnected && QR_CODE_PROVIDERS.includes(channel.provider)) {
+      setChannelToConnect(channel);
+      return;
+    }
+
     try {
       await toggleMutation.mutateAsync({
         channelId: channel.id,
@@ -844,6 +872,13 @@ export function ChannelsSection() {
       <ChannelSetupWizard
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
+      />
+
+      {/* Conexão via QR Code (Evolution API / Z-API) */}
+      <ChannelConnectModal
+        channel={channelToConnect}
+        isOpen={!!channelToConnect}
+        onClose={() => setChannelToConnect(null)}
       />
 
       {/* Delete Confirmation */}

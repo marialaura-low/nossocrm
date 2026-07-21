@@ -7,6 +7,7 @@ Sistema de messaging omnichannel integrado ao CRM.
 | Canal | Provider | Status |
 |-------|----------|--------|
 | WhatsApp | Z-API | ✅ Produção |
+| WhatsApp | Evolution API | ✅ Produção |
 | WhatsApp | Meta Cloud API | ✅ Produção |
 | Instagram | Meta Messenger Platform | ✅ Produção |
 | Email | Resend | ✅ Produção |
@@ -191,6 +192,13 @@ Quando uma nova conversa é criada (primeira mensagem de um contato):
 - Sem verificação Meta
 - Sem limites de mensagem
 - Ideal para SMBs
+
+### Evolution API (`lib/messaging/providers/whatsapp/evolution.provider.ts`)
+- Self-hosted, open-source e gratuito
+- Conexão via QR Code direto pelo CRM (Settings → Canais → Conectar)
+- Instância criada automaticamente no servidor se não existir
+- Webhook configurado automaticamente na conexão
+- Status sincronizado via polling (`GET /api/messaging/channels/[id]/status`)
 
 ### Meta Cloud API (`lib/messaging/providers/whatsapp/meta-cloud.provider.ts`)
 - Verificação Meta obrigatória

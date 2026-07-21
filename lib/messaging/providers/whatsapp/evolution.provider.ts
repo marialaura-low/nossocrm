@@ -45,9 +45,24 @@ import type {
  * Evolution API credentials configuration.
  */
 export interface EvolutionCredentials {
-  serverUrl: string;    // e.g. http://localhost:8080
-  instanceName: string; // instance name on the Evolution server
-  apiKey: string;       // AUTHENTICATION_API_KEY from the server
+  serverUrl: string;      // e.g. http://localhost:8080
+  instanceName: string;   // instance name on the Evolution server
+  apiKey: string;         // AUTHENTICATION_API_KEY from the server
+  webhookSecret?: string; // optional secret sent as header on webhooks (falls back to apiKey)
+}
+
+/**
+ * Error thrown by the Evolution API HTTP client, carrying the response status
+ * so callers can distinguish "instance not found" (404) from other failures.
+ */
+export class EvolutionApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = 'EvolutionApiError';
+  }
 }
 
 /**
@@ -60,13 +75,52 @@ interface EvolutionConnectionStateResponse {
 }
 
 /**
- * Evolution API QR code response.
+ * Evolution API connect response (`GET /instance/connect/{instance}`).
+ * The shape varies by server version:
+ * - v2.x: `{ pairingCode, code, base64?, count }` (base64 no top-level)
+ * - v1.x: `{ code, base64 }`
+ * - instância já conectada: `{ instance: { state: 'open' } }`
  */
-interface EvolutionQrCodeResponse {
+interface EvolutionConnectResponse {
+  pairingCode?: string;
+  code?: string;
+  base64?: string;
+  count?: number;
   qrcode?: {
     base64?: string;
+    pairingCode?: string;
+  };
+  instance?: {
+    state?: string;
   };
   error?: string;
+}
+
+/**
+ * Evolution API create instance response (`POST /instance/create`).
+ */
+interface EvolutionCreateInstanceResponse {
+  instance?: {
+    instanceName?: string;
+    instanceId?: string;
+    status?: string;
+  };
+  qrcode?: {
+    base64?: string;
+    pairingCode?: string;
+    code?: string;
+  };
+}
+
+/**
+ * Evolution API fetchInstances response item.
+ * v2 usa `ownerJid` na raiz; versões antigas usam `instance.owner`.
+ */
+interface EvolutionInstanceInfo {
+  ownerJid?: string;
+  instance?: {
+    owner?: string;
+  };
 }
 
 /**
@@ -181,6 +235,7 @@ export class EvolutionWhatsAppProvider extends BaseChannelProvider {
   private serverUrl: string = '';
   private instanceName: string = '';
   private apiKey: string = '';
+  private webhookSecret: string = '';
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -193,6 +248,7 @@ export class EvolutionWhatsAppProvider extends BaseChannelProvider {
     this.serverUrl = credentials.serverUrl.replace(/\/$/, ''); // strip trailing slash
     this.instanceName = credentials.instanceName;
     this.apiKey = credentials.apiKey;
+    this.webhookSecret = credentials.webhookSecret ?? '';
 
     this.log('info', 'Evolution API provider initialized', {
       serverUrl: this.serverUrl,
@@ -263,49 +319,165 @@ export class EvolutionWhatsAppProvider extends BaseChannelProvider {
 
   /**
    * Get QR code for WhatsApp connection.
+   * Endpoint: `GET /instance/connect/{instanceName}` (path param).
    * Returns a base64-encoded data URL (data:image/png;base64,...).
-   * @throws Error if QR code cannot be retrieved
+   * @throws Error if QR code cannot be retrieved (including instance already connected)
    */
   async getQrCode(): Promise<QrCodeResult> {
-    const response = await this.request<EvolutionQrCodeResponse>(
+    const response = await this.request<EvolutionConnectResponse>(
       'GET',
-      `/instance/connect?instanceName=${this.instanceName}`
+      `/instance/connect/${encodeURIComponent(this.instanceName)}`
     );
 
     if (response.error) {
       throw new Error(`QR code error: ${response.error}`);
     }
 
-    const base64 = response.qrcode?.base64;
+    if (response.instance?.state === 'open') {
+      throw new Error('Instance is already connected.');
+    }
+
+    // v2 retorna base64 no top-level; POST /instance/create retorna em qrcode.base64
+    const base64 = response.base64 ?? response.qrcode?.base64;
     if (!base64) {
       throw new Error('QR code not available. Instance may already be connected.');
     }
 
     return {
       qrCode: base64,
+      pairingCode: response.pairingCode ?? response.qrcode?.pairingCode,
       expiresAt: new Date(Date.now() + 60 * 1000).toISOString(), // QR codes expire in ~60s
     };
   }
 
   /**
+   * Get the raw connection state of the instance on the Evolution server.
+   * Returns `null` when the instance does not exist (HTTP 404).
+   */
+  async getLiveConnectionState(): Promise<string | null> {
+    try {
+      const response = await this.request<EvolutionConnectionStateResponse>(
+        'GET',
+        `/instance/connectionState/${encodeURIComponent(this.instanceName)}`
+      );
+      return response.instance?.state ?? 'close';
+    } catch (error) {
+      if (error instanceof EvolutionApiError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Create the instance on the Evolution server (`POST /instance/create`).
+   * Returns the QR code when the server already includes it in the response.
+   */
+  async createInstance(): Promise<QrCodeResult | null> {
+    const response = await this.request<EvolutionCreateInstanceResponse>(
+      'POST',
+      '/instance/create',
+      {
+        instanceName: this.instanceName,
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+      }
+    );
+
+    this.log('info', 'Evolution instance created', {
+      instanceName: this.instanceName,
+      status: response.instance?.status,
+    });
+
+    const base64 = response.qrcode?.base64;
+    if (!base64) return null;
+
+    return {
+      qrCode: base64,
+      pairingCode: response.qrcode?.pairingCode,
+      expiresAt: new Date(Date.now() + 60 * 1000).toISOString(),
+    };
+  }
+
+  /**
+   * Fetch the WhatsApp phone number connected to the instance.
+   * Returns "+5511999999999" style string, or null when unavailable.
+   */
+  async getConnectedPhone(): Promise<string | null> {
+    try {
+      const response = await this.request<EvolutionInstanceInfo[]>(
+        'GET',
+        `/instance/fetchInstances?instanceName=${encodeURIComponent(this.instanceName)}`
+      );
+      const owner = response?.[0]?.ownerJid ?? response?.[0]?.instance?.owner;
+      if (!owner) return null;
+
+      const digits = owner.split('@')[0].replace(/\D/g, '');
+      return digits ? `+${digits}` : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Configure webhook URL for receiving messages and status updates.
+   *
+   * Tenta primeiro o formato v2.2+ (`{ webhook: { ... } }`, com headers custom
+   * para autenticar na edge function) e cai para o formato flat v2.0/v2.1
+   * (`webhookByEvents`/`webhookBase64`) quando o servidor rejeita o body.
    */
   async configureWebhook(webhookUrl: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      await this.request('POST', `/webhook/set/${this.instanceName}`, {
-        enabled: true,
-        url: webhookUrl,
-        byEvents: true,
-        events: ['messages.upsert', 'messages.update', 'connection.update'],
-      });
+    const endpoint = `/webhook/set/${encodeURIComponent(this.instanceName)}`;
+    const events = ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'];
+    const authHeaderValue = this.webhookSecret || this.apiKey;
 
+    try {
+      // Formato v2.2+ (wrapped)
+      await this.request('POST', endpoint, {
+        webhook: {
+          enabled: true,
+          url: webhookUrl,
+          byEvents: false,
+          base64: false,
+          headers: { apikey: authHeaderValue },
+          events,
+        },
+      });
       return { success: true };
-    } catch (error) {
-      this.log('error', 'configureWebhook failed', { error: error instanceof Error ? error.message : error });
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
+    } catch (wrappedError) {
+      const isBadRequest =
+        wrappedError instanceof EvolutionApiError &&
+        [400, 404, 422].includes(wrappedError.status);
+
+      if (!isBadRequest) {
+        this.log('error', 'configureWebhook failed', {
+          error: wrappedError instanceof Error ? wrappedError.message : wrappedError,
+        });
+        return {
+          success: false,
+          error: wrappedError instanceof Error ? wrappedError.message : 'Unknown error',
+        };
+      }
+
+      try {
+        // Formato flat v2.0/v2.1
+        await this.request('POST', endpoint, {
+          enabled: true,
+          url: webhookUrl,
+          webhookByEvents: false,
+          webhookBase64: false,
+          events,
+        });
+        return { success: true };
+      } catch (flatError) {
+        this.log('error', 'configureWebhook failed (both formats)', {
+          error: flatError instanceof Error ? flatError.message : flatError,
+        });
+        return {
+          success: false,
+          error: flatError instanceof Error ? flatError.message : 'Unknown error',
+        };
+      }
     }
   }
 
@@ -895,6 +1067,7 @@ export class EvolutionWhatsAppProvider extends BaseChannelProvider {
     const timeout = setTimeout(() => controller.abort(), 15000);
 
     const requestBody = body ? JSON.stringify(body) : undefined;
+    const startedAt = Date.now();
     this.log('info', `${method} ${endpoint}`);
 
     let response: Response;
@@ -910,10 +1083,13 @@ export class EvolutionWhatsAppProvider extends BaseChannelProvider {
     }
 
     const responseText = await response.text();
-    this.log('info', `${method} ${endpoint} response (${Date.now()}ms): ${response.status}`);
+    this.log('info', `${method} ${endpoint} response (${Date.now() - startedAt}ms): ${response.status}`);
 
     if (!response.ok) {
-      throw new Error(`Evolution API request failed: ${response.status} ${responseText}`);
+      throw new EvolutionApiError(
+        `Evolution API request failed: ${response.status} ${responseText}`,
+        response.status
+      );
     }
 
     try {

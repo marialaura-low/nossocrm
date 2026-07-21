@@ -402,12 +402,15 @@ Deno.serve(async (req) => {
     return json(200, { ok: false, error: "Canal não encontrado" });
   }
 
-  // Auth default-deny: try global EVOLUTION_WEBHOOK_SECRET first,
-  // then fall back to apiKey stored in channel credentials.
+  // Auth default-deny: try global EVOLUTION_WEBHOOK_SECRET first, then the
+  // per-channel webhookSecret, then fall back to the apiKey stored in channel
+  // credentials (same chain used by configureWebhook when setting the header).
   // Never accept without auth.
+  const credentials = channel.credentials as Record<string, string> | null;
   const webhookSecret =
     Deno.env.get("EVOLUTION_WEBHOOK_SECRET") ??
-    (channel.credentials as Record<string, string>)?.apiKey;
+    credentials?.webhookSecret ??
+    credentials?.apiKey;
   const providedKey = getApiKeyFromRequest(req);
 
   if (!webhookSecret || !providedKey || !(await timingSafeEqual(providedKey, webhookSecret))) {
