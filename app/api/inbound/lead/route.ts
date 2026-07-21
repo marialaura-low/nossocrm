@@ -43,30 +43,50 @@ export async function POST(req: Request) {
   const { data: board } = await supabase.from('boards').select('id')
     .eq('key', 'inbound-caca-pesca').eq('organization_id', ORG).single();
   if (!board) return NextResponse.json({ error: 'board não encontrado' }, { status: 500 });
-  const { data: stage, error: stageErr } = await supabase.from('board_stages').select('id')
-    .eq('board_id', board.id).eq('name', 'Pré-qualificado').single();
-  if (stageErr || !stage) return NextResponse.json({ error: 'estágio Pré-qualificado não encontrado' }, { status: 500 });
 
   const tags: string[] = ['inbound', 'caca-pesca'];
   if (conflito.jaCliente) tags.push('conflito');
   if (!porte.cnpjValido) tags.push('cnpj-nao-verificado');
   else if (!porte.fitSortimento) tags.push('sem-fit');
 
+  const custom_fields = {
+    origem: 'inbound-caca-pesca', cnpj,
+    cidade: body.cidade ?? null, uf: body.uf ?? null,
+    sortimento: body.sortimento ?? null, marcas: body.marcas ?? null,
+    contato_nome: body.contatoNome ?? null, contato_whatsapp: body.contatoWhatsapp ?? null,
+    ad_referral: body.adReferral ?? null, transcript: body.transcript ?? null,
+    porte, conflito,
+  };
+
+  // DEDUP: já existe card ABERTO do mesmo CNPJ neste board? Atualiza em vez de duplicar.
+  // Card fechado (Ganho/Perdido) não conta — lead que volta merece card novo.
+  const { data: aberto } = await supabase.from('deals').select('id, stage_id')
+    .eq('board_id', board.id).eq('status', 'open').eq('custom_fields->>cnpj', cnpj)
+    .limit(1).maybeSingle();
+
+  if (aberto) {
+    // Reengajamento: atualiza os dados, NUNCA rebaixa o estágio (o Closer pode já ter movido o card).
+    const { data: upd, error: updErr } = await supabase.from('deals').update({
+      title: body.nomeLoja,
+      tags: [...tags, 'reengajou'],
+      custom_fields,
+    }).eq('id', aberto.id).select('id').single();
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+    return NextResponse.json({ ok: true, dealId: upd.id, deduped: true });
+  }
+
+  const { data: stage, error: stageErr } = await supabase.from('board_stages').select('id')
+    .eq('board_id', board.id).eq('name', 'Pré-qualificado').single();
+  if (stageErr || !stage) return NextResponse.json({ error: 'estágio Pré-qualificado não encontrado' }, { status: 500 });
+
   const { data: deal, error } = await supabase.from('deals').insert({
     organization_id: ORG, owner_id: OWNER,
     title: body.nomeLoja, value: 0, status: 'open', priority: 'medium',
     board_id: board.id, stage_id: stage.id,
     tags,
-    custom_fields: {
-      origem: 'inbound-caca-pesca', cnpj,
-      cidade: body.cidade ?? null, uf: body.uf ?? null,
-      sortimento: body.sortimento ?? null, marcas: body.marcas ?? null,
-      contato_nome: body.contatoNome ?? null, contato_whatsapp: body.contatoWhatsapp ?? null,
-      ad_referral: body.adReferral ?? null, transcript: body.transcript ?? null,
-      porte, conflito,
-    },
+    custom_fields,
   }).select('id').single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, dealId: deal.id });
+  return NextResponse.json({ ok: true, dealId: deal.id, deduped: false });
 }

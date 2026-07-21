@@ -34,8 +34,11 @@ Obrigatórios pra criar o card: **`cnpj` (14 díg) + `nomeLoja`**. Faltou → HT
 
 ## Resposta
 
-- `200 { "ok": true, "dealId": "<uuid>" }` — card criado no board **Inbound Caça&Pesca**, estágio **Pré-qualificado**.
+- `200 { "ok": true, "dealId": "<uuid>", "deduped": false }` — card NOVO criado no board **Inbound Caça&Pesca**, estágio **Pré-qualificado**.
+- `200 { "ok": true, "dealId": "<uuid>", "deduped": true }` — já existia card **aberto** desse CNPJ; o webhook **atualizou** esse card (transcrição/contato novos, tag `reengajou`) em vez de duplicar. O `stage_id` NÃO é rebaixado (se o Closer já moveu, o card fica onde está). Card fechado (Ganho/Perdido) não conta — CNPJ que volta depois de descartado gera card novo.
 - `401` — secret errado/ausente. `400` — payload inválido. `500` — board/estágio ausente ou erro de escrita.
+
+**Idempotência:** reenviar o mesmo CNPJ (bot reprocessou, lead mandou 2ª mensagem) é seguro — não cria duplicata enquanto houver card aberto.
 
 ## O que a AUTOMAÇÃO tem que fazer ANTES de chamar (nossa parte não faz)
 
