@@ -1,29 +1,40 @@
 // test/inbound/conflito.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const portalGetMock = vi.fn();
+vi.mock('@/lib/portal/rest', () => ({ portalGet: (...a: unknown[]) => portalGetMock(...a) }));
+
 import { checkConflito } from '@/lib/inbound/conflito';
 
-beforeEach(() => {
-  vi.restoreAllMocks();
-  vi.stubEnv('PORTAL_REST_URL', 'https://cvqczrciitcteabvonmw.supabase.co/rest/v1');
-  vi.stubEnv('PORTAL_FUNIL_TOKEN', 'tok');
-});
+beforeEach(() => { portalGetMock.mockReset(); });
 
 describe('checkConflito', () => {
-  it('jaCliente=true quando a edge devolve pedidos', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true, status: 200,
-      json: async () => ({ escritorio: 'REP GO', pedidos: [{ data: '2026-05-10', pares: 60 }] }),
-    }));
-    const r = await checkConflito('12345678000199');
+  it('jaCliente=true quando o faturamento tem NF pro CNPJ (e normaliza o cnpj)', async () => {
+    portalGetMock.mockResolvedValue([{ escritorio: 'REP GO', data_nf: '2026-05-10' }]);
+    const r = await checkConflito('12.345.678/0001-99');
     expect(r.jaCliente).toBe(true);
     expect(r.escritorio).toBe('REP GO');
     expect(r.ultimoPedido).toBe('2026-05-10');
+    expect(portalGetMock).toHaveBeenCalledWith(expect.stringContaining('/faturamento?cnpj=eq.12345678000199'));
   });
 
-  it('jaCliente=false quando a edge não acha o cliente (404/vazio)', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({}) }));
+  it('jaCliente=false quando não há NF (array vazio)', async () => {
+    portalGetMock.mockResolvedValue([]);
     const r = await checkConflito('99999999000199');
     expect(r.jaCliente).toBe(false);
     expect(r.escritorio).toBeNull();
+    expect(r.ultimoPedido).toBeNull();
+  });
+
+  it('jaCliente=false e não lança quando o portal erra (fail-safe)', async () => {
+    portalGetMock.mockRejectedValue(new Error('portal down'));
+    const r = await checkConflito('99999999000199');
+    expect(r.jaCliente).toBe(false);
+  });
+
+  it('cnpj inválido (menos de 14 dígitos) não consulta o portal', async () => {
+    const r = await checkConflito('123');
+    expect(r.jaCliente).toBe(false);
+    expect(portalGetMock).not.toHaveBeenCalled();
   });
 });

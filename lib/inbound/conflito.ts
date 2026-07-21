@@ -1,30 +1,28 @@
 // lib/inbound/conflito.ts
+import { portalGet } from '@/lib/portal/rest';
 import type { Conflito } from './types';
 
+// "Já é cliente?" — lookup GLOBAL por CNPJ na faturamento do portal (read-only).
+// Não usa a edge portal-cliente (que exige escritorio, inexistente pra lead novo).
 export async function checkConflito(cnpjDigits: string): Promise<Conflito> {
   const none: Conflito = { jaCliente: false, escritorio: null, ultimoPedido: null };
   const cnpj = (cnpjDigits || '').replace(/\D/g, '');
-  const base = process.env.PORTAL_REST_URL;
-  const token = process.env.PORTAL_FUNIL_TOKEN;
-  if (!cnpj || !base || !token) return none;
+  if (cnpj.length !== 14) return none;
 
-  const url = base.replace('/rest/v1', '/functions/v1/portal-cliente')
-    + `?matriz=${encodeURIComponent(cnpj)}`;
-  let resp: Response;
+  let rows: unknown;
   try {
-    resp = await fetch(url, { headers: { 'x-portal-token': token } });
+    rows = await portalGet(
+      `/faturamento?cnpj=eq.${cnpj}&select=escritorio,data_nf&order=data_nf.desc&limit=1`,
+    );
   } catch {
-    return none;
+    return none; // fail-safe: portal fora não derruba o funil
   }
-  if (!resp.ok) return none;
-  const d = await resp.json();
-  const pedidos: Array<{ data?: string }> = Array.isArray(d?.pedidos) ? d.pedidos : [];
-  if (pedidos.length === 0) return none;
+  if (!Array.isArray(rows) || rows.length === 0) return none;
 
-  const datas = pedidos.map((p) => p.data).filter(Boolean).sort();
+  const top = rows[0] as { escritorio?: string | null; data_nf?: string | null };
   return {
     jaCliente: true,
-    escritorio: d?.escritorio ?? null,
-    ultimoPedido: datas.length ? (datas[datas.length - 1] as string) : null,
+    escritorio: top.escritorio ?? null,
+    ultimoPedido: top.data_nf ?? null,
   };
 }
