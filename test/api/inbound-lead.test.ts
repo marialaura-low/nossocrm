@@ -1,4 +1,4 @@
-// test/api/inbound-gpt-maker.test.ts
+// test/api/inbound-lead.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const insertMock = vi.fn();
@@ -14,10 +14,10 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/inbound/cnpj', () => ({ enrichCnpj: async () => ({ fitSortimento: true, cnpjValido: true, razaoSocial: 'X', capitalSocial: 1, nomeFantasia: null, cnaePrincipal: null, cnaeDescricao: null, dataInicioAtividade: null, nFiliais: null }) }));
 vi.mock('@/lib/inbound/conflito', () => ({ checkConflito: async () => ({ jaCliente: true, escritorio: 'REP GO', ultimoPedido: '2026-05-10' }) }));
 
-import { POST } from '@/app/api/inbound/gpt-maker/route';
+import { POST } from '@/app/api/inbound/lead/route';
 
 function req(body: unknown, secret?: string) {
-  return new Request('http://x/api/inbound/gpt-maker', {
+  return new Request('http://x/api/inbound/lead', {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(secret ? { 'x-internal-secret': secret } : {}) },
     body: JSON.stringify(body),
@@ -27,7 +27,7 @@ const LEAD = { nomeLoja: 'Pesca Sul', cidade: 'Goiânia', uf: 'GO', cnpj: '12345
 
 beforeEach(() => { insertMock.mockClear(); vi.stubEnv('INTERNAL_API_SECRET', 's3cr3t'); });
 
-describe('POST /api/inbound/gpt-maker', () => {
+describe('POST /api/inbound/lead', () => {
   it('401 sem secret', async () => {
     const r = await POST(req(LEAD));
     expect(r.status).toBe(401);

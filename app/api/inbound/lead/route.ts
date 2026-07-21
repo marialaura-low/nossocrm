@@ -1,4 +1,6 @@
-// app/api/inbound/gpt-maker/route.ts
+// app/api/inbound/lead/route.ts
+// Webhook NEUTRO de ferramenta: recebe um lead JÁ qualificado de qualquer
+// automação (GPT Maker, n8n, Make, stack do Gabriel...) via POST + x-internal-secret.
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import { createStaticAdminClient } from '@/lib/supabase/server';
