@@ -51,7 +51,12 @@ Obrigatórios pra criar o card: **`cnpj` (14 díg) + `nomeLoja`**. Faltou → HT
 
 - Enriquece o CNPJ (BrasilAPI) → porte + fit de sortimento (discreto).
 - Cruza conflito **já-cliente** contra a `faturamento` do portal (read-only) → tag `conflito` + escritório no card.
-- Cria o card com transcrição + `adReferral` + porte + conflito nos `custom_fields`.
+- Cruza **território por cidade/UF** contra o mapa `territorio_cidade` (portal, read-only) → sinaliza, não bloqueia:
+  - `territorio-rep` (+ `rep_dominante` no card) = a praça já tem rep externo dono → munição/diplomacia pro Closer.
+  - `territorio-disputado` = mais de um rep externo relevante na cidade.
+  - `territorio-cobertura-casa` = Tiago/Simone já cobrem a praça (força-tarefa na carteira do REP GO).
+  - `territorio-novo` = praça sem cobertura conhecida.
+- Cria o card com transcrição + `adReferral` + porte + conflito + território nos `custom_fields`.
 
 ## ⚠️ REQUISITO INEGOCIÁVEL — anti-ban
 

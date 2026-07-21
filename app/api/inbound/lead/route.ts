@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { createStaticAdminClient } from '@/lib/supabase/server';
 import { enrichCnpj } from '@/lib/inbound/cnpj';
 import { checkConflito } from '@/lib/inbound/conflito';
+import { checkTerritorio } from '@/lib/inbound/territorio';
 import type { LeadInbound } from '@/lib/inbound/types';
 
 export const dynamic = 'force-dynamic';
@@ -37,7 +38,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'cnpj e nomeLoja obrigatórios' }, { status: 400 });
   }
 
-  const [porte, conflito] = await Promise.all([enrichCnpj(cnpj), checkConflito(cnpj)]);
+  const [porte, conflito, territorio] = await Promise.all([
+    enrichCnpj(cnpj), checkConflito(cnpj), checkTerritorio(body.cidade, body.uf),
+  ]);
 
   const supabase = createStaticAdminClient();
   const { data: board } = await supabase.from('boards').select('id')
@@ -48,6 +51,11 @@ export async function POST(req: Request) {
   if (conflito.jaCliente) tags.push('conflito');
   if (!porte.cnpjValido) tags.push('cnpj-nao-verificado');
   else if (!porte.fitSortimento) tags.push('sem-fit');
+  // Território (por cidade) — sinaliza, não bloqueia. Rep segue segurado nesta fase.
+  if (territorio.repDominante) tags.push('territorio-rep');
+  if (territorio.disputado) tags.push('territorio-disputado');
+  if (territorio.coberturaCasa) tags.push('territorio-cobertura-casa');
+  if (!territorio.mapeado) tags.push('territorio-novo');
 
   const custom_fields = {
     origem: 'inbound-caca-pesca', cnpj,
@@ -55,7 +63,7 @@ export async function POST(req: Request) {
     sortimento: body.sortimento ?? null, marcas: body.marcas ?? null,
     contato_nome: body.contatoNome ?? null, contato_whatsapp: body.contatoWhatsapp ?? null,
     ad_referral: body.adReferral ?? null, transcript: body.transcript ?? null,
-    porte, conflito,
+    porte, conflito, territorio,
   };
 
   // DEDUP: já existe card ABERTO do mesmo CNPJ neste board? Atualiza em vez de duplicar.
